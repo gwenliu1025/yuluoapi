@@ -161,7 +161,9 @@ func (s *RateLimitService) CheckErrorPolicy(ctx context.Context, account *Accoun
 	}
 	if statusCode == http.StatusTooManyRequests && account.ShouldIgnoreGemini429RateLimit() {
 		slog.Info("gemini_429_local_state_skipped", "account_id", account.ID, "stage", "error_policy")
-		return ErrorPolicySkipped
+		// 保持 ErrorPolicyNone，让 Gemini 网关继续执行原有 429 故障转移；
+		// 这里只跳过临时不可调度规则，实际状态写入由 HandleUpstreamError 再次守卫。
+		return ErrorPolicyNone
 	}
 	if account.IsPoolMode() {
 		// 池模式只跳过默认账号状态处理；管理员显式配置的临时不可调度规则仍应生效。
