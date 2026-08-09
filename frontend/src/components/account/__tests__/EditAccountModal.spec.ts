@@ -1080,6 +1080,41 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock).not.toHaveBeenCalled()
   })
 
+  it('defaults every legacy Gemini account to the 429 never-rate-limit policy and persists it', async () => {
+    const account = buildVertexAccount()
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    const toggle = wrapper.get('[data-testid="gemini-never-rate-limit-toggle"]')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.gemini_ignore_429_rate_limit).toBe(true)
+  })
+
+  it('loads and preserves a single Gemini account opt-out', async () => {
+    const account = buildVertexAccount()
+    account.extra = { gemini_ignore_429_rate_limit: false }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    const toggle = wrapper.get('[data-testid="gemini-never-rate-limit-toggle"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.gemini_ignore_429_rate_limit).toBe(false)
+  })
+
   it('allows saving Vertex SA account when backend redacted service_account_json but credentials_status reports it exists', async () => {
     // 新前端 + 新后端：响应已脱敏，credentials 里没有 service_account_json，credentials_status.has_service_account_json=true
     const account = buildVertexAccount()

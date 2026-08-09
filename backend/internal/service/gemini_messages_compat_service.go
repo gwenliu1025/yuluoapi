@@ -2948,6 +2948,10 @@ func asInt(v any) (int, bool) {
 }
 
 func (s *GeminiMessagesCompatService) handleGeminiUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, body []byte) {
+	if statusCode == http.StatusTooManyRequests && account.ShouldIgnoreGemini429RateLimit() {
+		logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini 429] Account %d skips local rate-limit state by account policy", account.ID)
+		return
+	}
 	// 遵守自定义错误码策略：未命中则跳过所有限流处理
 	if !account.ShouldHandleErrorCode(statusCode) {
 		return

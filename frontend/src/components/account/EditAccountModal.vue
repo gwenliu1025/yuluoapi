@@ -1227,6 +1227,40 @@
         </div>
       </div>
 
+      <!-- Gemini 429 永不限流（适用于全部 Gemini 账号类型） -->
+      <div
+        v-if="account.platform === 'gemini'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.geminiNeverRateLimit') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.geminiNeverRateLimitHint') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            data-testid="gemini-never-rate-limit-toggle"
+            :aria-checked="geminiNeverRateLimitEnabled"
+            :aria-label="t('admin.accounts.geminiNeverRateLimit')"
+            @click="geminiNeverRateLimitEnabled = !geminiNeverRateLimitEnabled"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              geminiNeverRateLimitEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                geminiNeverRateLimitEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+      </div>
+
       <!-- Temp Unschedulable Rules -->
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
         <div class="mb-3 flex items-center justify-between">
@@ -2799,6 +2833,7 @@ const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
 const GROK_CLIENT_TOOL_CACHE_EXTRA_KEY = 'grok_client_tool_cache_enabled'
+const GEMINI_IGNORE_429_RATE_LIMIT_EXTRA_KEY = 'gemini_ignore_429_rate_limit'
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const poolModeRetryStatusCodesInput = ref('')
@@ -2850,6 +2885,7 @@ const grokOAuthBaseUrl = ref('')
 // Grok Free OAuth accounts use client-tool prompt caching by default. Keep an
 // explicit false in the account extra as the opt-out signal.
 const grokClientToolCacheEnabled = ref(true)
+const geminiNeverRateLimitEnabled = ref(true)
 
 const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(false)
@@ -3350,6 +3386,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   mixedScheduling.value = false
   allowOverages.value = false
 	const extra = newAccount.extra as Record<string, unknown> | undefined
+	geminiNeverRateLimitEnabled.value =
+		newAccount.platform === 'gemini' && extra?.[GEMINI_IGNORE_429_RATE_LIMIT_EXTRA_KEY] !== false
 	mixedScheduling.value = extra?.mixed_scheduling === true
 	allowOverages.value = extra?.allow_overages === true
 	autoPause5hThreshold.value = typeof extra?.auto_pause_5h_threshold === 'number' ? extra.auto_pause_5h_threshold * 100 : null
@@ -4761,6 +4799,17 @@ const handleSubmit = async () => {
       // Quota notify config
       writeQuotaNotifyToExtra(newExtra, 'update')
       updatePayload.extra = newExtra
+    }
+
+    // Gemini 全类型共用账号级开关。字段缺失默认开启，但保存时写入显式布尔值，
+    // 便于管理员对单个账号关闭并恢复官方 429 冷却行为。
+    if (props.account.platform === 'gemini') {
+      const currentExtra = (updatePayload.extra as Record<string, unknown>) ||
+        (props.account.extra as Record<string, unknown>) || {}
+      updatePayload.extra = {
+        ...currentExtra,
+        [GEMINI_IGNORE_429_RATE_LIMIT_EXTRA_KEY]: geminiNeverRateLimitEnabled.value
+      }
     }
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {

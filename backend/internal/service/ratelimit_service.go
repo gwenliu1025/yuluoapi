@@ -159,6 +159,10 @@ func (s *RateLimitService) CheckErrorPolicy(ctx context.Context, account *Accoun
 		slog.Info("account_error_code_skipped", "account_id", account.ID, "status_code", statusCode)
 		return ErrorPolicySkipped
 	}
+	if statusCode == http.StatusTooManyRequests && account.ShouldIgnoreGemini429RateLimit() {
+		slog.Info("gemini_429_local_state_skipped", "account_id", account.ID, "stage", "error_policy")
+		return ErrorPolicySkipped
+	}
 	if account.IsPoolMode() {
 		// 池模式只跳过默认账号状态处理；管理员显式配置的临时不可调度规则仍应生效。
 		// 401 保留现有认证错误语义，避免改变重复 401 的升级行为。
@@ -177,6 +181,10 @@ func (s *RateLimitService) CheckErrorPolicy(ctx context.Context, account *Accoun
 // 返回是否应该停止该账号的调度
 func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte, requestedModel ...string) (shouldDisable bool) {
 	ctx = withTempUnschedulableModel(ctx, requestedModel)
+	if statusCode == http.StatusTooManyRequests && account.ShouldIgnoreGemini429RateLimit() {
+		slog.Info("gemini_429_local_state_skipped", "account_id", account.ID, "stage", "upstream_error")
+		return false
+	}
 	customErrorCodesEnabled := account.IsCustomErrorCodesEnabled()
 
 	// 池模式默认不标记本地账号状态；但管理员显式配置的临时不可调度规则优先。
@@ -1904,6 +1912,9 @@ func (s *RateLimitService) GetTempUnschedStatus(ctx context.Context, accountID i
 
 func (s *RateLimitService) HandleTempUnschedulable(ctx context.Context, account *Account, statusCode int, responseBody []byte, requestedModel ...string) bool {
 	if account == nil {
+		return false
+	}
+	if statusCode == http.StatusTooManyRequests && account.ShouldIgnoreGemini429RateLimit() {
 		return false
 	}
 	if account.IsPoolMode() && !account.IsCustomErrorCodesEnabled() {

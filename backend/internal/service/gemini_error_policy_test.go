@@ -471,6 +471,9 @@ func TestHandleGeminiUpstreamError_GoogleOneCapacityExhaustedUsesTierCooldown(t 
 		ID:       511,
 		Platform: PlatformGemini,
 		Type:     AccountTypeOAuth,
+		Extra: map[string]any{
+			GeminiIgnore429RateLimitExtraKey: false,
+		},
 		Credentials: map[string]any{
 			"oauth_type": "google_one",
 			"tier_id":    "google_ai_pro",

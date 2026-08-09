@@ -1026,6 +1026,26 @@ func (a *Account) IsCustomErrorCodesEnabled() bool {
 	return false
 }
 
+// GeminiIgnore429RateLimitExtraKey 是 Gemini 账号忽略上游 429 本地状态写入的配置键。
+// 字段缺失时默认启用，确保现有和新建 Gemini 账号不会因上游 429 被本地限流或停调度；
+// 管理员只有在账号编辑页明确关闭开关时，才恢复上游默认的 429 冷却行为。
+const GeminiIgnore429RateLimitExtraKey = "gemini_ignore_429_rate_limit"
+
+// ShouldIgnoreGemini429RateLimit 返回该账号是否应忽略 Gemini 上游 429 的本地状态写入。
+// 只有显式布尔 false 才关闭该策略；缺失或异常值继续按默认启用处理。
+func (a *Account) ShouldIgnoreGemini429RateLimit() bool {
+	if a == nil || a.Platform != PlatformGemini {
+		return false
+	}
+	if a.Extra == nil {
+		return true
+	}
+	if enabled, ok := a.Extra[GeminiIgnore429RateLimitExtraKey].(bool); ok {
+		return enabled
+	}
+	return true
+}
+
 // IsPoolMode 检查 API Key 账号是否启用池模式。
 // 池模式下，上游错误不标记本地账号状态，而是在同一账号上重试。
 func (a *Account) IsPoolMode() bool {

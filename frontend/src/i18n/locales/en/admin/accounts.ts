@@ -649,6 +649,9 @@ export default {
       poolModeHint: 'Enable when upstream is an account pool; errors won\'t mark local account status',
       poolModeInfo:
         'When enabled, upstream 429/403/401 errors will auto-retry without marking the account as rate-limited or errored. Suitable for upstream pointing to another sub2api instance.',
+      geminiNeverRateLimit: 'Never locally rate-limit Gemini on 429',
+      geminiNeverRateLimitHint:
+        'Enabled by default for every Gemini account. Upstream 429 responses may still fail over or reach the client, but this account will not be marked rate-limited, temporarily unschedulable, or errored. Turn it off to restore the standard 429 cooldown behavior.',
       poolModeRetryCount: 'Same-Account Retries',
       poolModeRetryCountHint:
         'Only applies in pool mode. Use 0 to disable in-place retry. Default {default}, maximum {max}.',
