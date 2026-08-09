@@ -45,8 +45,8 @@ require_file ".github/scripts/validate-release-version.sh"
 require_contains ".github/workflows/backend-ci.yml" '.github/scripts/test-validate-release-version.sh'
 require_contains ".github/workflows/backend-ci.yml" '.github/scripts/test-release-policy.sh'
 
-require_exact_line "$version_file" "0.1.169"
-require_exact_line "deploy/.env.example" "SUB2API_IMAGE=ghcr.io/gwenliu1025/sub2api:0.1.169"
+require_exact_line "$version_file" "0.1.172"
+require_exact_line "deploy/.env.example" "SUB2API_IMAGE=ghcr.io/gwenliu1025/sub2api:0.1.172"
 require_contains "$workflow" 'tags:'
 require_contains "$workflow" '"v*"'
 require_contains "$workflow" 'workflow_dispatch:'
@@ -90,7 +90,7 @@ require_contains "$goreleaser" '> AI API 网关平台'
 require_contains "$goreleaser" '## 文档'
 
 for compose in $compose_files; do
-  require_contains "$compose" 'image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/sub2api:0.1.169}'
+  require_contains "$compose" 'image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/sub2api:0.1.172}'
   require_absent "$compose" 'weishaw/sub2api:latest'
 done
 
