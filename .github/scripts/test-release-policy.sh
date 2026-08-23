@@ -59,6 +59,9 @@ require_contains "$workflow" 'tags: ghcr.io/${{ steps.lowercase.outputs.owner }}
 require_contains "$workflow" 'VERSION=${{ needs.validate_release_version.outputs.image_tag }}'
 require_contains "$workflow" 'COMMIT=${{ steps.revision.outputs.sha }}'
 require_contains "$workflow" 'OCI_SOURCE=https://github.com/${{ github.repository }}'
+require_contains "$workflow" 'Verify checked-out release source version'
+require_contains "$workflow" 'SOURCE_VERSION="$(tr -d '\''\r\n'\'' < backend/cmd/server/VERSION)"'
+require_contains "$workflow" 'test "$SOURCE_VERSION" = "$IMAGE_TAG"'
 require_contains "$workflow" 'GITHUB_REPO_NAME: ${{ github.event.repository.name }}'
 require_contains "$workflow" 'image="ghcr.io/${REPOSITORY,,}:$IMAGE_TAG"'
 require_contains "$workflow" 'Sub2API %s 已发布'
@@ -70,6 +73,18 @@ require_absent "$workflow" 'sync-version-file'
 require_absent "$workflow" 'DOCKERHUB'
 require_absent "$workflow" 'simple_release'
 require_absent "$workflow" 'SIMPLE_RELEASE'
+
+require_exact_line "frontend/src/components/common/VersionBadge.vue" "const GITHUB_REPO = 'gwenliu1025/sub2api'"
+require_exact_line "frontend/src/components/common/VersionBadge.vue" "const DOCKER_IMAGE = 'ghcr.io/gwenliu1025/sub2api'"
+require_absent "frontend/src/components/common/VersionBadge.vue" 'Wei-Shaw/sub2api'
+require_absent "frontend/src/components/common/VersionBadge.vue" 'weishaw/sub2api'
+require_exact_line "deploy/install.sh" 'GITHUB_REPO="gwenliu1025/sub2api"'
+require_absent "deploy/install.sh" 'Wei-Shaw/sub2api'
+require_contains "deploy/docker-deploy.sh" 'https://raw.githubusercontent.com/gwenliu1025/sub2api/main/deploy'
+require_absent "deploy/docker-deploy.sh" 'Wei-Shaw/sub2api'
+require_exact_line "deploy/.env.example" 'APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/gwenliu1025/sub2api:0.1.179'
+require_contains "deploy/apple-container.sh" 'ghcr.io/gwenliu1025/sub2api:0.1.179'
+require_absent "deploy/apple-container.sh" 'weishaw/sub2api:latest'
 
 require_absent "$goreleaser" 'dockers:'
 require_absent "$goreleaser" 'docker_manifests:'

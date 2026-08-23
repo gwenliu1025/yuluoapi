@@ -92,11 +92,11 @@ type systemUpdateResponseEnvelope struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    struct {
-		Message         string `json:"message"`
-		AlreadyUpToDate bool   `json:"already_up_to_date"`
-		CurrentVersion  string `json:"current_version"`
-		LatestVersion   string `json:"latest_version"`
-		OperationID     string `json:"operation_id"`
+		Message         string                     `json:"message"`
+		AlreadyUpToDate bool                       `json:"already_up_to_date"`
+		CurrentVersion  string                     `json:"current_version"`
+		LatestVersion   string                     `json:"latest_version"`
+		OperationID     string                     `json:"operation_id"`
 		UpdateMode      string                     `json:"update_mode"`
 		Status          *service.UpdateAgentStatus `json:"status"`
 	} `json:"data"`
@@ -369,6 +369,27 @@ func TestSystemHandlerRollbackWithVersionCallsRollbackToVersion(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	require.Equal(t, 0, body.Code)
 	require.Equal(t, "Rollback completed. Please restart the service.", body.Data.Message)
+}
+
+func TestSystemHandlerDockerRollbackReturnsUpdateMode(t *testing.T) {
+	status := &service.UpdateAgentStatus{State: service.UpdateAgentPrepared}
+	updateSvc := &systemHandlerUpdateServiceStub{usesDockerAgent: true, status: status}
+	repo := newMemoryIdempotencyRepoStub()
+	router := newSystemHandlerTestRouter(t, updateSvc, repo)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/rollback",
+		strings.NewReader(`{"version":"0.1.172"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "docker-rollback-to-172")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body systemUpdateResponseEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "docker_agent", body.Data.UpdateMode)
+	require.Equal(t, status, body.Data.Status)
+	require.Equal(t, 1, updateSvc.statusCalls)
 }
 
 func TestSystemHandlerRollbackWithDisallowedVersionReturnsBadRequest(t *testing.T) {

@@ -590,6 +590,8 @@ func TestHandleGeminiUpstreamError_PoolMode429(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// 本组只验证池模式与自定义错误码的优先级，显式关闭 fork 默认的 429 本地状态豁免。
+			tt.account.Extra = map[string]any{GeminiIgnore429RateLimitExtraKey: false}
 			repo := &rateLimit429AccountRepoStub{}
 			svc := &GeminiMessagesCompatService{
 				accountRepo:      repo,

@@ -213,12 +213,20 @@ func (h *SystemHandler) Rollback(c *gin.Context) {
 		}
 		succeeded = true
 
-		return gin.H{
+		result := gin.H{
 			"message":      "Rollback completed. Please restart the service.",
 			"need_restart": true,
 			"version":      targetVersion,
 			"operation_id": lock.OperationID(),
-		}, nil
+		}
+		if h.updateSvc.UsesDockerAgent() {
+			result["message"] = "Rollback prepared. Please restart the service."
+			result["update_mode"] = "docker_agent"
+			if status, statusErr := h.updateSvc.GetUpdateStatus(ctx); statusErr == nil {
+				result["status"] = status
+			}
+		}
+		return result, nil
 	})
 }
 

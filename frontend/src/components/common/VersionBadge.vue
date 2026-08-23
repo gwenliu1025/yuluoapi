@@ -654,9 +654,9 @@ import { waitForUpdateActivation } from './updateActivation'
 import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/icons/Icon.vue'
 
-const GITHUB_REPO = 'Wei-Shaw/sub2api'
-// Docker Hub image published by CI (tags carry no "v" prefix, e.g. weishaw/sub2api:0.1.146)
-const DOCKER_IMAGE = 'weishaw/sub2api'
+const GITHUB_REPO = 'gwenliu1025/sub2api'
+// Fork 的 GHCR 镜像仅发布精确版本标签，不使用 latest 或主次版本别名。
+const DOCKER_IMAGE = 'ghcr.io/gwenliu1025/sub2api'
 
 const { t } = useI18n()
 
@@ -837,12 +837,14 @@ async function handleRollback() {
 
   rollingBack.value = true
   rollbackError.value = ''
+  preparedUpdateMode.value = undefined
 
   try {
     const result = await rollbackAPI(selectedRollbackVersion.value)
     successKind.value = 'rollback'
     updateSuccess.value = true
     needRestart.value = result.need_restart
+    preparedUpdateMode.value = result.update_mode
     rollbackPanelOpen.value = false
     // Clear version cache so the next check reflects the rolled-back version
     appStore.clearVersionCache()
