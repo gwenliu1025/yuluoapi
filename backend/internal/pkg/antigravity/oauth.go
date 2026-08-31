@@ -25,7 +25,10 @@ const (
 	UserInfoURL  = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 	// Antigravity OAuth client ID 由部署环境注入，避免将凭证写入源码。
-	ClientID = "CONFIGURE_ANTIGRAVITY_OAUTH_CLIENT_ID"
+	DefaultClientID = "CONFIGURE_ANTIGRAVITY_OAUTH_CLIENT_ID"
+
+	// AntigravityOAuthClientIDEnv 是 Antigravity OAuth client_id 的环境变量名。
+	AntigravityOAuthClientIDEnv = "ANTIGRAVITY_OAUTH_CLIENT_ID"
 
 	// AntigravityOAuthClientSecretEnv 是 Antigravity OAuth client_secret 的环境变量名。
 	AntigravityOAuthClientSecretEnv = "ANTIGRAVITY_OAUTH_CLIENT_SECRET"
@@ -63,6 +66,7 @@ var userAgentVersionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 type UserAgentVersionResolver func(ctx context.Context) string
 
 var (
+	ClientID = DefaultClientID
 	// defaultUserAgentVersion 可通过环境变量 ANTIGRAVITY_USER_AGENT_VERSION 配置。
 	defaultUserAgentVersion  = DefaultUserAgentVersion
 	userAgentVersionMu       sync.RWMutex
@@ -73,6 +77,9 @@ var (
 var defaultClientSecret = "CONFIGURE_ANTIGRAVITY_OAUTH_CLIENT_SECRET"
 
 func init() {
+	if clientID := strings.TrimSpace(os.Getenv(AntigravityOAuthClientIDEnv)); clientID != "" {
+		ClientID = clientID
+	}
 	// 从环境变量读取版本号，未设置则使用默认值
 	if version := NormalizeUserAgentVersion(os.Getenv(AntigravityUserAgentVersionEnv)); version != "" {
 		defaultUserAgentVersion = version
