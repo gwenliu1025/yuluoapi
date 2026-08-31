@@ -10,7 +10,7 @@ docker run -d \
   -p 8080:8080 \
   -e DATABASE_URL="postgres://user:pass@host:5432/sub2api" \
   -e REDIS_URL="redis://host:6379" \
-  ghcr.io/gwenliu1025/sub2api:0.1.179
+  ghcr.io/gwenliu1025/yuluoapi:0.1.179
 ```
 
 ## Docker Compose
@@ -20,7 +20,7 @@ version: '3.8'
 
 services:
   sub2api:
-    image: ghcr.io/gwenliu1025/sub2api:0.1.179
+    image: ghcr.io/gwenliu1025/yuluoapi:0.1.179
     ports:
       - "8080:8080"
     environment:
@@ -69,5 +69,5 @@ volumes:
 
 ## Links
 
-- [GitHub Repository](https://github.com/gwenliu1025/sub2api)
-- [Documentation](https://github.com/gwenliu1025/sub2api#readme)
+- [GitHub Repository](https://github.com/gwenliu1025/yuluoapi)
+- [Documentation](https://github.com/gwenliu1025/yuluoapi#readme)

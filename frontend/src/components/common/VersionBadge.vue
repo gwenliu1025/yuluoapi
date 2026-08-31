@@ -654,9 +654,9 @@ import { waitForUpdateActivation } from './updateActivation'
 import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/icons/Icon.vue'
 
-const GITHUB_REPO = 'gwenliu1025/sub2api'
+const GITHUB_REPO = 'gwenliu1025/yuluoapi'
 // Fork 的 GHCR 镜像仅发布精确版本标签，不使用 latest 或主次版本别名。
-const DOCKER_IMAGE = 'ghcr.io/gwenliu1025/sub2api'
+const DOCKER_IMAGE = 'ghcr.io/gwenliu1025/yuluoapi'
 
 const { t } = useI18n()
 

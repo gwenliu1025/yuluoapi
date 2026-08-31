@@ -6,9 +6,9 @@ import { waitForUpdateActivation } from '../updateActivation'
 function status(state: UpdateAgentStatus['state'], message = ''): UpdateAgentStatus {
   return {
     state,
-    current_image: 'ghcr.io/gwenliu1025/sub2api:0.1.169',
-    target_image: 'ghcr.io/gwenliu1025/sub2api:0.1.169',
-    previous_image: 'ghcr.io/gwenliu1025/sub2api:0.1.156',
+    current_image: 'ghcr.io/gwenliu1025/yuluoapi:0.1.169',
+    target_image: 'ghcr.io/gwenliu1025/yuluoapi:0.1.169',
+    previous_image: 'ghcr.io/gwenliu1025/yuluoapi:0.1.156',
     message,
     updated_at: '2026-08-01T00:00:00Z'
   }

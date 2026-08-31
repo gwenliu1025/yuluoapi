@@ -8,7 +8,7 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.26.6-alpine
+ARG GOLANG_IMAGE=golang:1.27.0-alpine
 ARG ALPINE_IMAGE=alpine:3.21
 ARG POSTGRES_IMAGE=postgres:18-alpine
 ARG GOPROXY=https://goproxy.cn,direct
@@ -108,7 +108,7 @@ FROM ${POSTGRES_IMAGE} AS pg-client
 FROM ${ALPINE_IMAGE}
 
 ARG VERSION=dev
-ARG OCI_SOURCE=https://github.com/gwenliu1025/sub2api
+ARG OCI_SOURCE=https://github.com/gwenliu1025/yuluoapi
 
 # Labels
 LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"

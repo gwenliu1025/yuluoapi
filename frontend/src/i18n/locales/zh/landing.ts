@@ -14,6 +14,10 @@ export default {
     login: '登录',
     getStarted: '立即开始',
     goToDashboard: '进入控制台',
+    browseModels: '浏览模型',
+    featuredChineseModels: '精选中国模型',
+    moreChineseModels: '更多国产模型',
+    viewAllModels: '查看全部模型',
     // 新增：面向用户的价值主张
     heroSubtitle: '一个密钥，畅用多个 AI 模型',
     heroDescription: '无需管理多个订阅账号，一站式接入 Claude、GPT、Gemini 等主流 AI 服务',

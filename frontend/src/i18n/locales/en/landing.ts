@@ -14,6 +14,10 @@ export default {
     login: 'Login',
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
+    browseModels: 'Browse Models',
+    featuredChineseModels: 'Featured Chinese Models',
+    moreChineseModels: 'More Chinese Models',
+    viewAllModels: 'View All Models',
     // User-focused value proposition
     heroSubtitle: 'One Key, All AI Models',
     heroDescription: 'No need to manage multiple subscriptions. Access Claude, GPT, Gemini and more with a single API key',

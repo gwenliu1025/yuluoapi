@@ -24,8 +24,8 @@ const (
 	TokenURL     = "https://oauth2.googleapis.com/token"
 	UserInfoURL  = "https://www.googleapis.com/oauth2/v2/userinfo"
 
-	// Antigravity OAuth 客户端凭证
-	ClientID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+	// Antigravity OAuth client ID 由部署环境注入，避免将凭证写入源码。
+	ClientID = "CONFIGURE_ANTIGRAVITY_OAUTH_CLIENT_ID"
 
 	// AntigravityOAuthClientSecretEnv 是 Antigravity OAuth client_secret 的环境变量名。
 	AntigravityOAuthClientSecretEnv = "ANTIGRAVITY_OAUTH_CLIENT_SECRET"
@@ -54,7 +54,7 @@ const (
 
 	// Antigravity API 端点
 	antigravityProdBaseURL  = "https://cloudcode-pa.googleapis.com"
-	antigravityDailyBaseURL = "https://daily-cloudcode-pa.sandbox.googleapis.com"
+	antigravityDailyBaseURL = "https://daily-cloudcode-pa.googleapis.com"
 )
 
 var userAgentVersionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
@@ -70,7 +70,7 @@ var (
 )
 
 // defaultClientSecret 可通过环境变量 ANTIGRAVITY_OAUTH_CLIENT_SECRET 配置
-var defaultClientSecret = "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"
+var defaultClientSecret = "CONFIGURE_ANTIGRAVITY_OAUTH_CLIENT_SECRET"
 
 func init() {
 	// 从环境变量读取版本号，未设置则使用默认值

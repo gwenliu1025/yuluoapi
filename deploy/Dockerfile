@@ -7,7 +7,7 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.26.6-alpine
+ARG GOLANG_IMAGE=golang:1.27.0-alpine
 ARG ALPINE_IMAGE=alpine:3.20
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
@@ -84,7 +84,7 @@ RUN VERSION_VALUE="${VERSION}" && \
 FROM ${ALPINE_IMAGE}
 
 ARG VERSION=dev
-ARG OCI_SOURCE=https://github.com/gwenliu1025/sub2api
+ARG OCI_SOURCE=https://github.com/gwenliu1025/yuluoapi
 
 # Labels
 LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"

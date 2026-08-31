@@ -33,11 +33,11 @@ func TestLoadDefaultUpdateRepo(t *testing.T) {
 
 func TestLoadUpdateRepoFromEnv(t *testing.T) {
 	resetViperWithJWTSecret(t)
-	t.Setenv("UPDATE_REPO", "gwenliu1025/sub2api-canary")
+	t.Setenv("UPDATE_REPO", "gwenliu1025/yuluoapi-canary")
 
 	cfg, err := Load()
 	require.NoError(t, err)
-	require.Equal(t, "gwenliu1025/sub2api-canary", cfg.Update.Repo)
+	require.Equal(t, "gwenliu1025/yuluoapi-canary", cfg.Update.Repo)
 }
 
 func TestValidateUpdateRepoBlankFallsBackToDefault(t *testing.T) {
@@ -53,12 +53,12 @@ func TestValidateUpdateRepoBlankFallsBackToDefault(t *testing.T) {
 
 func TestValidateUpdateRepoRejectsInvalidSlugs(t *testing.T) {
 	for _, repo := range []string{
-		"https://github.com/gwenliu1025/sub2api",
+		"https://github.com/gwenliu1025/yuluoapi",
 		"../sub2api",
-		"gwenliu1025/sub2api/extra",
+		"gwenliu1025/yuluoapi/extra",
 		"bad_owner/sub2api",
 		"gwenliu1025 /sub2api",
-		"gwenliu1025/sub2api?ref=main",
+		"gwenliu1025/yuluoapi?ref=main",
 	} {
 		t.Run(repo, func(t *testing.T) {
 			resetViperWithJWTSecret(t)
@@ -91,14 +91,14 @@ func TestLoadDockerUpdateConfigFromEnv(t *testing.T) {
 	t.Setenv("UPDATE_MODE", UpdateModeDockerAgent)
 	t.Setenv("UPDATE_AGENT_SOCKET", "/run/custom/updater.sock")
 	t.Setenv("UPDATE_AGENT_TIMEOUT_SECONDS", "900")
-	t.Setenv("UPDATE_IMAGE_REPOSITORY", "ghcr.io/gwenliu1025/sub2api-canary")
+	t.Setenv("UPDATE_IMAGE_REPOSITORY", "ghcr.io/gwenliu1025/yuluoapi-canary")
 
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.Equal(t, UpdateModeDockerAgent, cfg.Update.Mode)
 	require.Equal(t, "/run/custom/updater.sock", cfg.Update.AgentSocket)
 	require.Equal(t, 900, cfg.Update.AgentTimeoutSeconds)
-	require.Equal(t, "ghcr.io/gwenliu1025/sub2api-canary", cfg.Update.ImageRepository)
+	require.Equal(t, "ghcr.io/gwenliu1025/yuluoapi-canary", cfg.Update.ImageRepository)
 }
 
 func TestValidateDockerUpdateConfig(t *testing.T) {
@@ -134,7 +134,7 @@ func TestValidateDockerUpdateConfig(t *testing.T) {
 			name: "tagged image repository",
 			mutate: func(cfg *Config) {
 				cfg.Update.Mode = UpdateModeDockerAgent
-				cfg.Update.ImageRepository = "ghcr.io/gwenliu1025/sub2api:latest"
+				cfg.Update.ImageRepository = "ghcr.io/gwenliu1025/yuluoapi:latest"
 			},
 			wantErr: "update.image_repository",
 		},
@@ -152,6 +152,13 @@ func TestValidateDockerUpdateConfig(t *testing.T) {
 			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
+}
+
+func TestLoadDefaultModelsListReadMaxBytes(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, DefaultModelsListReadMaxBytes, cfg.Gateway.ModelsListReadMaxBytes)
 }
 
 func TestLoadTimezonePrecedence(t *testing.T) {
@@ -696,6 +703,15 @@ func TestLoadOpenAIWSClientFirstMessageTimeoutFromEnv(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.Equal(t, 120, cfg.Gateway.OpenAIWS.ClientFirstMessageTimeoutSeconds)
+}
+
+func TestLoadOpenAIWSForceHTTPFromEnv(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("GATEWAY_OPENAI_WS_FORCE_HTTP", "true")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.Gateway.OpenAIWS.ForceHTTP)
 }
 
 func TestLoadDefaultOpenAICompactModel(t *testing.T) {
@@ -1938,6 +1954,11 @@ func TestValidateConfigErrors(t *testing.T) {
 			name:    "gateway text body exceeds media body",
 			mutate:  func(c *Config) { c.Gateway.TextMaxBodySize = c.Gateway.MaxBodySize + 1 },
 			wantErr: "gateway.text_max_body_size",
+		},
+		{
+			name:    "gateway models list read limit",
+			mutate:  func(c *Config) { c.Gateway.ModelsListReadMaxBytes = 0 },
+			wantErr: "gateway.models_list_read_max_bytes",
 		},
 		{
 			name:    "gateway response header timeout",
