@@ -56,10 +56,10 @@ Use the automated preparation script for the easiest setup:
 
 ```bash
 # Download and run the preparation script
-curl -sSL https://raw.githubusercontent.com/gwenliu1025/sub2api/v0.1.179/deploy/docker-deploy.sh | bash
+curl -sSL https://raw.githubusercontent.com/gwenliu1025/sub2api/v0.1.185/deploy/docker-deploy.sh | bash
 
 # Or download first, then run
-curl -sSL https://raw.githubusercontent.com/gwenliu1025/sub2api/v0.1.179/deploy/docker-deploy.sh -o docker-deploy.sh
+curl -sSL https://raw.githubusercontent.com/gwenliu1025/sub2api/v0.1.185/deploy/docker-deploy.sh -o docker-deploy.sh
 chmod +x docker-deploy.sh
 ./docker-deploy.sh
 ```
@@ -92,7 +92,7 @@ If you prefer manual control:
 
 ```bash
 # Clone repository
-git clone --branch v0.1.179 --depth 1 https://github.com/gwenliu1025/sub2api.git
+git clone --branch v0.1.185 --depth 1 https://github.com/gwenliu1025/sub2api.git
 cd sub2api/deploy
 
 # Configure environment
@@ -100,7 +100,7 @@ cp .env.example .env
 chmod 600 .env
 nano .env  # Set POSTGRES_PASSWORD and other required variables
 # 确认使用 fork 的精确版本镜像：
-grep -Fx 'SUB2API_IMAGE=ghcr.io/gwenliu1025/sub2api:0.1.179' .env
+grep -Fx 'SUB2API_IMAGE=ghcr.io/gwenliu1025/sub2api:0.1.185' .env
 
 # Generate secure secrets (recommended)
 JWT_SECRET=$(openssl rand -hex 32)
@@ -147,6 +147,28 @@ When using Docker Compose with `AUTO_SETUP=true`:
    ```bash
    docker compose logs sub2api | grep "admin password"
    ```
+
+### Startup and Database Recovery
+
+Sub2API applies database migrations during application startup. PostgreSQL can
+remain in its recovery/startup phase briefly after a host or Docker daemon
+restart. The application retries transient PostgreSQL startup and connection
+errors with bounded exponential backoff, then starts automatically when the
+database becomes ready. Authentication errors, migration checksum mismatches,
+SQL errors, and other permanent configuration or data errors fail immediately.
+
+The Compose example also uses a PostgreSQL health check that verifies both
+server readiness and a simple SQL query. `depends_on: condition: service_healthy`
+controls dependency ordering for a fresh Compose start, but it is not a
+replacement for application-level retries when Docker restores existing
+containers after a host restart.
+
+For systemd deployments, keep `Restart=always` and `RestartSec` configured in
+`sub2api.service`; the application retry covers transient database startup,
+while systemd remains the supervisor for permanent process exits. For
+Kubernetes, use a PostgreSQL readiness probe and retain the Sub2API startup
+retry behavior; configure the application liveness probe separately so a
+database recovery period is not treated as a permanent process failure.
 
 ### Database Migration Notes (PostgreSQL)
 
@@ -378,12 +400,12 @@ For production servers using systemd.
 ### One-Line Installation
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/gwenliu1025/sub2api/v0.1.179/deploy/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/gwenliu1025/sub2api/v0.1.185/deploy/install.sh | sudo bash
 ```
 
 ### Manual Installation
 
-1. Download v0.1.179 from [GitHub Releases](https://github.com/gwenliu1025/sub2api/releases/tag/v0.1.179)
+1. Download v0.1.185 from [GitHub Releases](https://github.com/gwenliu1025/sub2api/releases/tag/v0.1.185)
 2. Extract and copy the binary to `/opt/sub2api/`
 3. Copy `sub2api.service` to `/etc/systemd/system/`
 4. Run:
