@@ -2,7 +2,7 @@
 
 > 本文件是 `yuluoapi` 项目的磁盘状态入口。后续判断项目现状时，以本文件、Git 提交和对应证据文档为准，不以聊天记录或模型记忆为准。
 >
-> 最近核验时间：2026-08-31（Asia/Shanghai）
+> 最近核验时间：2026-09-04（Asia/Shanghai）
 
 ## 1. 项目标识
 
@@ -61,7 +61,7 @@ upstream https://github.com/Wei-Shaw/sub2api.git
 ### 仓库引用
 
 ```text
-origin/main                    85f31f50d54970ff617e708097ed2af938b5649c
+origin/main                    7e61ba06b272b20901a2465831be69ed72c2fbd5
 origin/v0.1.179 tag object     9cdcbff81611c902bfd1cd57ed5f25fb7654535c
 origin/v0.1.179 peeled commit  92f353939ad50946cb709a92cf7568d673aa0924
 ```
@@ -110,14 +110,12 @@ Tests       1678 passed (1678)
 
 ## 6. 明确未做事项
 
-以下内容不属于本次建仓工作，尚未实施：
+以下内容截至 2026-09-04 仍未实施：
 
-- 建仓阶段未修改前端品牌、名称、Logo、颜色、首页或管理后台界面；当前仅在独立功能分支形成默认 `/home` 品牌首页候选，尚未合入 `main`。
 - 未把 Go module、前端包名和源码内 `Sub2API` 标识批量重命名为雨落 API。
-- 未创建雨落 API 的新版本标签或 GitHub Release。
-- 未发布新的 GHCR 镜像。
-- 未部署、迁移或重启任何生产服务。
 - 未修改 `gwenliu1025/sub2api` 和 `Wei-Shaw/sub2api`。
+- 管理员密码轮换未闭环。
+- 本轮 `v0.2.0` 只执行代码合入、仓库资产发布与文档沉淀；生产 Prepare、Activate、部署和重启不在范围内。
 
 ## 7. 已知事项
 
@@ -156,9 +154,9 @@ git fetch upstream --prune
 
 每次完成重要变更后，应更新 `CURRENT_STATE.md`，并在 `docs/operations/` 下新增带日期的证据记录；不得用聊天记录替代项目文档。
 
-## 10. 默认 `/home` 品牌首页候选（2026-08-27）
+## 10. 默认 `/home` 品牌首页 V1（2026-08-27）
 
-- 状态：已在独立工作树 `E:\gwenliu\YuLuo API-worktrees\yuluo-home-brand`、分支 `codex/yuluo-home-brand` 完成实现与验收；尚未提交、推送、发布或部署。
+- 状态：已实现和验收，并于 2026-08-31 随 `v0.1.180` 提交、推送、发布和部署；`design-home-v1` 标签冻结该前端版本。
 - 基线提交：`85f31f50d54970ff617e708097ed2af938b5649c`。
 - 范围：只替换未配置 `home_content` 且未启用 `compact_home_enabled` 时的默认 `/home`；自定义 URL/HTML 首页、简洁首页、配置优先级、其他路由及后端保持不变。
 - 内容：雨后青瓷主视觉、固定品牌文案、双 CTA、DeepSeek/智谱 GLM/Kimi/Qwen 原品牌标志、更多模型入口，以及带减少动态效果、离屏暂停和卸载清理的 GSAP 雨滴、动态涟漪与真实照片花瓣动效。
@@ -194,3 +192,19 @@ git fetch upstream --prune
 ### 11.4 已知顺序风险
 
 当前顺序是先定前端设计、再择取原作者更新。若原作者改动落在 `HomeView.vue` 或前端目录结构上，本次首页改动需在冲突中重放一次。反向顺序（先择取更新、再做品牌前端）冲突面更小。选择当前顺序时，须在择取更新前先复核原作者对前端目录的改动范围，并在 `docs/operations/` 记录复核结论。
+
+## 12. `v0.1.180` 发布与生产基线
+
+- `origin/main`、`v0.1.180` 和 `design-home-v1` 均指向 `7e61ba06b272b20901a2465831be69ed72c2fbd5`。
+- GitHub Release：`https://github.com/gwenliu1025/yuluoapi/releases/tag/v0.1.180`。
+- GHCR：`ghcr.io/gwenliu1025/yuluoapi:0.1.180`。
+- 生产部署目录为 `/opt/yuluoapi`，公网业务入口为 `https://sub.yuluocloud.com`；运行状态在任何生产操作前必须重新回查。
+
+## 13. `v0.2.0` 代码汇流与发布候选（2026-09-04）
+
+- 来源：已验证的旧站 fork 合入提交 `50e115bd54596f538a8eb5ae3659e664a5cbc64e`，其上游父提交为官方 `v0.2.0` `aa236488351eb71e120fc2b6fb32e36b0374c918`。
+- 汇流：以雨落 `main` 为主体合入上述 fork，保留 `YuluoBrandHome.vue`、`RainMotionLayer.vue`、首页素材、GSAP 依赖、首页测试和雨落仓库发布/更新契约。
+- 版本与资产契约：`v0.2.0` → 应用 `0.2.0` → `ghcr.io/gwenliu1025/yuluoapi:0.2.0`。
+- 已通过本地 Go unit/integration、golangci-lint、前端 255 个测试文件/1850 项测试、类型检查、Lint、生产构建、部署脚本、Compose、Docker 镜像构建和 Skill 校验。
+- macOS 专用 Apple container 生命周期测试在 Windows Git Bash 中因 BSD `stat -f` 与 GNU `stat` 不兼容无法作为本机结果；GitHub CI 的 macOS runner 继续作为该项权威验证入口。
+- 仓库发布和 GHCR 结果记录在 `docs/operations/2026-09-04-yuluoapi-v0.2.0-merge-release-evidence.md`；生产仍保持 `v0.1.180`，等待用户自行更新。

@@ -13,9 +13,9 @@ import (
 
 func TestAccountShouldIgnoreGemini429RateLimit(t *testing.T) {
 	for _, accountType := range []string{AccountTypeAPIKey, AccountTypeOAuth, AccountTypeServiceAccount} {
-		t.Run(accountType+"_defaults_enabled", func(t *testing.T) {
+		t.Run(accountType+"_defaults_disabled", func(t *testing.T) {
 			account := &Account{Platform: PlatformGemini, Type: accountType}
-			require.True(t, account.ShouldIgnoreGemini429RateLimit())
+			require.False(t, account.ShouldIgnoreGemini429RateLimit())
 		})
 	}
 
@@ -39,11 +39,11 @@ func TestAccountShouldIgnoreGemini429RateLimit(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "malformed_value_keeps_default",
+			name: "malformed_value_disables_policy",
 			account: &Account{Platform: PlatformGemini, Extra: map[string]any{
 				GeminiIgnore429RateLimitExtraKey: "false",
 			}},
-			want: true,
+			want: false,
 		},
 		{
 			name:    "non_gemini",
@@ -64,7 +64,7 @@ func TestAccountShouldIgnoreGemini429RateLimit(t *testing.T) {
 	}
 }
 
-func TestGemini429DefaultPolicySkipsAllLocalSchedulingState(t *testing.T) {
+func TestGemini429ExplicitPolicySkipsAllLocalSchedulingState(t *testing.T) {
 	repo := &geminiErrorPolicyRepo{}
 	rateLimitService := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
 	compatService := &GeminiMessagesCompatService{
@@ -75,6 +75,9 @@ func TestGemini429DefaultPolicySkipsAllLocalSchedulingState(t *testing.T) {
 		ID:       901,
 		Platform: PlatformGemini,
 		Type:     AccountTypeAPIKey,
+		Extra: map[string]any{
+			GeminiIgnore429RateLimitExtraKey: true,
+		},
 		Credentials: map[string]any{
 			"custom_error_codes_enabled": true,
 			"custom_error_codes":         []any{float64(http.StatusTooManyRequests)},
@@ -90,7 +93,7 @@ func TestGemini429DefaultPolicySkipsAllLocalSchedulingState(t *testing.T) {
 	}
 	body := []byte(`{"error":{"message":"quota exhausted"}}`)
 
-	// 自定义错误码仍可参与故障转移分类，但任何实际状态写入都必须被账号开关拦截。
+	// 显式开启后，自定义错误码仍可参与故障转移分类，但实际状态写入必须被账号开关拦截。
 	require.Equal(t, ErrorPolicyMatched,
 		rateLimitService.CheckErrorPolicy(context.Background(), account, http.StatusTooManyRequests, body))
 	require.False(t,

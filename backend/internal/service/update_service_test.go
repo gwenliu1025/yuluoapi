@@ -321,7 +321,7 @@ func TestUpdateServiceDockerAgentActivateAndStatusDelegate(t *testing.T) {
 
 func TestUpdateServiceDockerAgentCachedInfoIncludesMode(t *testing.T) {
 	cache := &updateServiceCacheStub{
-		data: `{"latest":"0.1.170","repo":"gwenliu1025/sub2api","timestamp":32503680000}`,
+		data: `{"latest":"0.1.170","repo":"gwenliu1025/yuluoapi","timestamp":32503680000}`,
 	}
 	svc := NewUpdateService(
 		cache, &updateServiceGitHubClientStub{}, defaultGitHubRepo,

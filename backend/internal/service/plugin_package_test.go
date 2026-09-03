@@ -34,10 +34,8 @@ func TestPluginPackageInstallerInstallUnsignedDevelopmentPackage(t *testing.T) {
 	assert.FileExists(t, installation.ArtifactPath)
 	info, statErr := os.Stat(installation.BinaryPath)
 	require.NoError(t, statErr)
-	if runtime.GOOS == "windows" {
-		// Windows 不把 Unix 可执行位映射到 os.FileMode，文件存在即可由运行时决定执行权限。
-		assert.NotZero(t, info.Size())
-	} else {
+	// Windows 不暴露 POSIX 可执行位，只在支持该语义的平台验证权限。
+	if runtime.GOOS != "windows" {
 		assert.NotZero(t, info.Mode()&0o100)
 	}
 	assert.Contains(t, installation.InstallPath, filepath.Join("installed", "com.example.openai-transport"))

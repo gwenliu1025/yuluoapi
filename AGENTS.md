@@ -9,6 +9,7 @@
 ## 按任务类型选择文档
 
 - 首页、品牌、默认 `/home`、首页文案、首页模型展示或雨滴/涟漪动效：必须阅读 `docs/superpowers/specs/2026-08-27-yuluo-homepage-brand-design.md`；执行首页改造时同时阅读 `docs/superpowers/plans/2026-08-27-yuluo-homepage-implementation.md`。
+- 版本同步、GitHub Release/GHCR、Docker 更新、生产核验或故障排查：必须阅读 `.codex/skills/yuluoapi-ops/SKILL.md`，再按任务只加载其中一个或少量相关参考；不得把其他站点或附属服务的运行事实带入雨落 API。
 - 仓库来源、历史、分支、标签、远端或同步关系：阅读 `docs/superpowers/specs/2026-08-26-yuluoapi-repository-design.md` 及相关 `docs/operations/` 证据。
 - 已有 OpenSpec change 覆盖的功能：读取对应 `openspec/changes/<change-name>/` 下的 `proposal.md`、`design.md`、`specs/`、`tasks.md` 和验证材料；只实施当前任务涉及的 change 与任务项。
 - 其他任务：优先查找同模块最近的已确认规格、计划、OpenSpec 和操作证据；没有适用文档时，先明确范围再修改。

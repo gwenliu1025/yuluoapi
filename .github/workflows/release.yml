@@ -35,23 +35,6 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
-  update_version:
-    needs: validate_release_version
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.validate_release_version.outputs.release_tag }}
-      - name: Write release version
-        env:
-          IMAGE_TAG: ${{ needs.validate_release_version.outputs.image_tag }}
-        run: printf '%s\n' "$IMAGE_TAG" > backend/cmd/server/VERSION
-      - uses: actions/upload-artifact@v7
-        with:
-          name: version-file
-          path: backend/cmd/server/VERSION
-          retention-days: 1
-
   build_frontend:
     needs: validate_release_version
     runs-on: ubuntu-latest
@@ -80,7 +63,7 @@ jobs:
           retention-days: 1
 
   release:
-    needs: [validate_release_version, update_version, build_frontend]
+    needs: [validate_release_version, build_frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -97,10 +80,6 @@ jobs:
           set -euo pipefail
           SOURCE_VERSION="$(tr -d '\r\n' < backend/cmd/server/VERSION)"
           test "$SOURCE_VERSION" = "$IMAGE_TAG"
-      - uses: actions/download-artifact@v8
-        with:
-          name: version-file
-          path: backend/cmd/server/
       - uses: actions/download-artifact@v8
         with:
           name: frontend-dist
@@ -174,7 +153,7 @@ jobs:
             exit 0
           fi
           image="ghcr.io/${REPOSITORY,,}:$IMAGE_TAG"
-          message="$(printf 'Sub2API %s 已发布\n\ndocker pull %s\n\nhttps://github.com/%s/releases/tag/%s' \
+          message="$(printf '雨落 API %s 已发布\n\ndocker pull %s\n\nhttps://github.com/%s/releases/tag/%s' \
             "$RELEASE_TAG" "$image" "$REPOSITORY" "$RELEASE_TAG")"
           curl --fail-with-body --silent --show-error \
             -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \

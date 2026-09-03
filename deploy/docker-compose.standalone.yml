@@ -12,7 +12,7 @@
 
 services:
   sub2api:
-    image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/yuluoapi:0.1.180}
+    image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/yuluoapi:0.2.0}
     container_name: sub2api
     restart: unless-stopped
     security_opt:
@@ -102,7 +102,6 @@ services:
 
       # Built-in OAuth client secrets (optional)
       # SECURITY: This repo does not embed third-party client_secret.
-      - ANTIGRAVITY_OAUTH_CLIENT_ID=${ANTIGRAVITY_OAUTH_CLIENT_ID:-}
       - GEMINI_CLI_OAUTH_CLIENT_SECRET=${GEMINI_CLI_OAUTH_CLIENT_SECRET:-}
       - ANTIGRAVITY_OAUTH_CLIENT_SECRET=${ANTIGRAVITY_OAUTH_CLIENT_SECRET:-}
       - ANTIGRAVITY_USER_AGENT_VERSION=${ANTIGRAVITY_USER_AGENT_VERSION:-}
@@ -118,7 +117,7 @@ services:
       - UPDATE_PROXY_URL=${UPDATE_PROXY_URL:-}
 
       # =======================================================================
-      # Image Generation Stream & Concurrency
+      # Gateway Upstream, Scheduling & Image Configuration
       # =======================================================================
       # Gateway values come from Compose .env or the shell.
       # Fallbacks mirror Sub2API backend defaults so omitted values preserve behavior.

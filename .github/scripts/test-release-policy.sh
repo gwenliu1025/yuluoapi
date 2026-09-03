@@ -45,8 +45,8 @@ require_file ".github/scripts/validate-release-version.sh"
 require_contains ".github/workflows/backend-ci.yml" '.github/scripts/test-validate-release-version.sh'
 require_contains ".github/workflows/backend-ci.yml" '.github/scripts/test-release-policy.sh'
 
-require_exact_line "$version_file" "0.1.179"
-require_exact_line "deploy/.env.example" "SUB2API_IMAGE=ghcr.io/gwenliu1025/sub2api:0.1.179"
+require_exact_line "$version_file" "0.2.0"
+require_exact_line "deploy/.env.example" "SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.0"
 require_contains "$workflow" 'tags:'
 require_contains "$workflow" '"v*"'
 require_contains "$workflow" 'workflow_dispatch:'
@@ -55,7 +55,7 @@ require_contains "$workflow" 'IMAGE_TAG="${RELEASE_TAG#v}"'
 require_contains "$workflow" '.github/scripts/validate-release-version.sh "$RELEASE_TAG" "$IMAGE_TAG"'
 require_contains "$workflow" 'context: .'
 require_contains "$workflow" 'platforms: linux/amd64,linux/arm64'
-require_contains "$workflow" 'tags: ghcr.io/${{ steps.lowercase.outputs.owner }}/sub2api:${{ needs.validate_release_version.outputs.image_tag }}'
+require_contains "$workflow" 'tags: ghcr.io/${{ steps.lowercase.outputs.owner }}/yuluoapi:${{ needs.validate_release_version.outputs.image_tag }}'
 require_contains "$workflow" 'VERSION=${{ needs.validate_release_version.outputs.image_tag }}'
 require_contains "$workflow" 'COMMIT=${{ steps.revision.outputs.sha }}'
 require_contains "$workflow" 'OCI_SOURCE=https://github.com/${{ github.repository }}'
@@ -64,9 +64,9 @@ require_contains "$workflow" 'SOURCE_VERSION="$(tr -d '\''\r\n'\'' < backend/cmd
 require_contains "$workflow" 'test "$SOURCE_VERSION" = "$IMAGE_TAG"'
 require_contains "$workflow" 'GITHUB_REPO_NAME: ${{ github.event.repository.name }}'
 require_contains "$workflow" 'image="ghcr.io/${REPOSITORY,,}:$IMAGE_TAG"'
-require_contains "$workflow" 'Sub2API %s 已发布'
-require_contains "$workflow" 'update_version:'
-require_contains "$workflow" 'actions/upload-artifact@v7'
+require_contains "$workflow" '雨落 API %s 已发布'
+require_absent "$workflow" 'update_version:'
+require_absent "$workflow" 'name: version-file'
 require_absent "$workflow" 'git commit'
 require_absent "$workflow" 'git push'
 require_absent "$workflow" 'sync-version-file'
@@ -74,24 +74,24 @@ require_absent "$workflow" 'DOCKERHUB'
 require_absent "$workflow" 'simple_release'
 require_absent "$workflow" 'SIMPLE_RELEASE'
 
-require_exact_line "frontend/src/components/common/VersionBadge.vue" "const GITHUB_REPO = 'gwenliu1025/sub2api'"
-require_exact_line "frontend/src/components/common/VersionBadge.vue" "const DOCKER_IMAGE = 'ghcr.io/gwenliu1025/sub2api'"
+require_exact_line "frontend/src/components/common/VersionBadge.vue" "const GITHUB_REPO = 'gwenliu1025/yuluoapi'"
+require_exact_line "frontend/src/components/common/VersionBadge.vue" "const DOCKER_IMAGE = 'ghcr.io/gwenliu1025/yuluoapi'"
 require_absent "frontend/src/components/common/VersionBadge.vue" 'Wei-Shaw/sub2api'
 require_absent "frontend/src/components/common/VersionBadge.vue" 'weishaw/sub2api'
-require_exact_line "deploy/install.sh" 'GITHUB_REPO="gwenliu1025/sub2api"'
+require_exact_line "deploy/install.sh" 'GITHUB_REPO="gwenliu1025/yuluoapi"'
 require_absent "deploy/install.sh" 'Wei-Shaw/sub2api'
-require_contains "deploy/docker-deploy.sh" 'https://raw.githubusercontent.com/gwenliu1025/sub2api/v0.1.179/deploy'
+require_contains "deploy/docker-deploy.sh" 'https://raw.githubusercontent.com/gwenliu1025/yuluoapi/v0.2.0/deploy'
 require_absent "deploy/docker-deploy.sh" 'Wei-Shaw/sub2api'
-require_exact_line "deploy/.env.example" 'APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/gwenliu1025/sub2api:0.1.179'
-require_contains "deploy/apple-container.sh" 'ghcr.io/gwenliu1025/sub2api:0.1.179'
+require_exact_line "deploy/.env.example" 'APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.0'
+require_contains "deploy/apple-container.sh" 'ghcr.io/gwenliu1025/yuluoapi:0.2.0'
 require_absent "deploy/apple-container.sh" 'weishaw/sub2api:latest'
 
-require_exact_line "deploy/docker-deploy.sh" 'GITHUB_RAW_URL="https://raw.githubusercontent.com/gwenliu1025/sub2api/v0.1.179/deploy"'
+require_exact_line "deploy/docker-deploy.sh" 'GITHUB_RAW_URL="https://raw.githubusercontent.com/gwenliu1025/yuluoapi/v0.2.0/deploy"'
 for release_doc in deploy/README.md deploy/DOCKER.md deploy/APPLE_CONTAINER.md; do
   require_absent "$release_doc" 'Wei-Shaw/sub2api'
   require_absent "$release_doc" 'weishaw/sub2api'
   require_absent "$release_doc" 'sub2api:latest'
-  require_contains "$release_doc" 'ghcr.io/gwenliu1025/sub2api:0.1.179'
+  require_contains "$release_doc" 'ghcr.io/gwenliu1025/yuluoapi:0.2.0'
 done
 
 require_absent "$goreleaser" 'dockers:'
@@ -113,7 +113,7 @@ require_contains "$goreleaser" '> AI API 网关平台'
 require_contains "$goreleaser" '## 文档'
 
 for compose in $compose_files; do
-  require_contains "$compose" 'image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/sub2api:0.1.179}'
+  require_contains "$compose" 'image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/yuluoapi:0.2.0}'
   require_absent "$compose" 'weishaw/sub2api:latest'
 done
 
