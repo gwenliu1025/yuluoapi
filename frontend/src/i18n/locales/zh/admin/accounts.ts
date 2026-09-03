@@ -847,7 +847,7 @@ export default {
         '启用后，上游 429/403/401 错误将自动重试而不标记账号限流或错误，适用于上游指向另一个 sub2api 实例的场景。',
       geminiNeverRateLimit: 'Gemini 429 永不限流',
       geminiNeverRateLimitHint:
-        '默认对全部 Gemini 账号开启。上游返回 429 时仍可故障转移或向客户端返回错误，但不会把本账号标记为限流、临时不可调度或错误；关闭后恢复官方 429 冷却行为。',
+        '默认关闭。仅当本账号指向自行处理 429 冷却的上游代理池时开启；开启后不会把本账号标记为限流、临时不可调度或错误。',
       poolModeRetryCount: '同账号重试次数',
       poolModeRetryCountHint: '仅在池模式下生效。0 表示不原地重试；默认 {default}，最大 {max}。',
       poolModeRetryStatusCodes: '同账号重试状态码',

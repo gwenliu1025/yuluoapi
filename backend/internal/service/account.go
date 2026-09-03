@@ -1066,24 +1066,23 @@ func (a *Account) IsCustomErrorCodesEnabled() bool {
 	return false
 }
 
-// GeminiIgnore429RateLimitExtraKey 是 Gemini 账号忽略上游 429 本地状态写入的配置键。
-// 字段缺失时默认启用，确保现有和新建 Gemini 账号不会因上游 429 被本地限流或停调度；
-// 管理员只有在账号编辑页明确关闭开关时，才恢复上游默认的 429 冷却行为。
+// GeminiIgnore429RateLimitExtraKey 是 Gemini 代理池账号忽略上游 429 本地状态写入的配置键。
+// 该策略必须由管理员按账号显式启用，避免真实额度耗尽的账号被反复调度。
 const GeminiIgnore429RateLimitExtraKey = "gemini_ignore_429_rate_limit"
 
 // ShouldIgnoreGemini429RateLimit 返回该账号是否应忽略 Gemini 上游 429 的本地状态写入。
-// 只有显式布尔 false 才关闭该策略；缺失或异常值继续按默认启用处理。
+// 只有显式布尔 true 才启用；字段缺失或值异常时使用官方默认的 429 冷却行为。
 func (a *Account) ShouldIgnoreGemini429RateLimit() bool {
 	if a == nil || a.Platform != PlatformGemini {
 		return false
 	}
 	if a.Extra == nil {
-		return true
+		return false
 	}
 	if enabled, ok := a.Extra[GeminiIgnore429RateLimitExtraKey].(bool); ok {
 		return enabled
 	}
-	return true
+	return false
 }
 
 // IsPoolMode 检查 API Key 账号是否启用池模式。
@@ -1407,8 +1406,8 @@ func (a *Account) IsCodingPlan() bool {
 
 // GetAPIProtocol 返回国产供应商账号的上游 API 协议。存储于
 // credentials["api_protocol"]；缺失或与平台不匹配时回退 chat_completions
-// （与既有行为完全一致）。responses 协议仅 deepseek 支持（官方原生 /responses
-// 端点，适配 Codex）；kimi/zhipu 无此端点。
+// （与既有行为完全一致）。responses 协议仅 deepseek / kimi 支持（官方原生
+// Responses 端点，适配 Codex）；zhipu 无此端点。
 func (a *Account) GetAPIProtocol() string {
 	if a == nil || !a.IsCNProvider() {
 		return APIProtocolChatCompletions
@@ -1419,13 +1418,42 @@ func (a *Account) GetAPIProtocol() string {
 	case APIProtocolAnthropic:
 		return APIProtocolAnthropic
 	case APIProtocolResponses:
-		if a.Platform == PlatformDeepseek {
+		if a.SupportsNativeCNResponses() {
 			return APIProtocolResponses
 		}
 	case APIProtocolChatCompletions:
 		return APIProtocolChatCompletions
 	}
 	return APIProtocolChatCompletions
+}
+
+// SupportsNativeCNResponses 报告该国产供应商是否提供原生 Responses 端点。
+// DeepSeek 官方为 /responses（无 /v1）；Kimi 按量付费与 Coding Plan 均为
+// /v1/responses（moonshot.cn / kimi.com/coding）。
+func (a *Account) SupportsNativeCNResponses() bool {
+	if a == nil {
+		return false
+	}
+	switch a.Platform {
+	case PlatformDeepseek, PlatformKimi:
+		return true
+	default:
+		return false
+	}
+}
+
+// UsesNativeCNResponses 报告当前账号是否应按原生 Responses 协议转发
+// （显式 responses，或 adaptive 且平台具备原生端点）。
+func (a *Account) UsesNativeCNResponses() bool {
+	if a == nil || !a.SupportsNativeCNResponses() {
+		return false
+	}
+	switch a.GetAPIProtocol() {
+	case APIProtocolResponses, APIProtocolAdaptive:
+		return true
+	default:
+		return false
+	}
 }
 
 // IsAdaptiveAPIProtocol 报告账号是否按入站协议动态选择供应商原生端点。
