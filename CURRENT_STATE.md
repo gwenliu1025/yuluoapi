@@ -210,3 +210,12 @@ git fetch upstream --prune
 - 已通过本地 Go unit/integration、golangci-lint、前端 255 个测试文件/1850 项测试、类型检查、Lint、生产构建、部署脚本、Compose、Docker 镜像构建和 Skill 校验。
 - macOS 专用 Apple container 生命周期测试在 Windows Git Bash 中因 BSD `stat -f` 与 GNU `stat` 不兼容无法作为本机结果；GitHub CI 的 macOS runner 继续作为该项权威验证入口。
 - 仓库发布和 GHCR 结果记录在 `docs/operations/2026-09-04-yuluoapi-v0.2.0-merge-release-evidence.md`；生产仍保持 `v0.1.180`，等待用户自行更新。
+
+## 14. 在线更新代理迁移与生产权限故障（2026-09-04）
+
+- 管理端能够从 `gwenliu1025/yuluoapi` 发现 `v0.2.0`，但用户触发更新时返回 `503 UPDATE_AGENT_PERMISSION_DENIED`；请求尚未进入镜像拉取、Prepare 或 Activate。
+- 生产只读证据：`sub2api-updater.service` 为 `active/enabled`，宿主机健康和状态接口正常；Socket 为 `0660 root:root`，代理配置为 `socket_gid=0`、`allowed_uids=[0]`，而容器内 `/app/sub2api` 主进程实际以 `1000:1000` 运行，应用 UID 对 Socket 无写权限。
+- 根因：首次部署只在服务器上安装了 updater，当前仓库没有承载 updater 实现；安装时又把容器的空 `Config.User` 错误解释为 root，导致 `app_uid=0`、`socket_gid=0`。仓库/GHCR 地址本身正确。
+- 正式收敛：将海外站已经运行验证的通用 updater 实现、安装器、systemd unit 和 127 项测试迁入 `deploy/updater/`；实现保持同一机制，雨落配置独立绑定 `gwenliu1025/yuluoapi`、`ghcr.io/gwenliu1025/yuluoapi` 和 `/opt/yuluoapi`。
+- 雨落安装契约固定为应用 `1000:1000`、Socket `0660 root:1000`、`allowed_uids=[0,1000]`；唯一安装和验收入口为 `deploy/updater/README.md`，CI 运行完整 updater 测试。
+- 生产当前仍保持故障现场，尚未用仓库版本重新安装 updater，也未触发 Prepare/Activate 或切换应用镜像。调查与迁移证据见 `docs/operations/2026-09-04-yuluoapi-updater-migration-evidence.md`。

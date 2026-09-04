@@ -21,6 +21,7 @@ This directory contains files for deploying Sub2API on Linux servers and Apple-s
 | `APPLE_CONTAINER.md` | Apple `container` deployment and operations guide |
 | `.env.example` | Container environment variables template |
 | `DOCKER.md` | Docker Hub documentation |
+| `updater/README.md` | 雨落 API 管理端在线更新代理的安装、权限与恢复契约 |
 | `install.sh` | One-click binary installation script |
 | `install-datamanagementd.sh` | datamanagementd 一键安装脚本 |
 | `sub2api.service` | Systemd service unit file |
@@ -49,6 +50,8 @@ See [APPLE_CONTAINER.md](./APPLE_CONTAINER.md) for configuration, upgrades, pers
 ---
 
 ## Docker Deployment (Recommended)
+
+管理端在线更新还需要在宿主机安装 `deploy/updater/`。安装参数、Socket UID/GID 和验收方式只以 [updater/README.md](./updater/README.md) 为准。
 
 ### Method 1: One-Click Deployment (Recommended)
 

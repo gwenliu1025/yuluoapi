@@ -15,6 +15,8 @@
 
 任何运行事实先在目标主机只读回查，不用本文件中的名称推断当前状态。
 
+更新代理的实现、安装参数和权限验收由 `deploy/updater/README.md` 持有；本 Skill 只负责运维顺序，不维护第二份安装命令。雨落镜像入口脚本会把主进程降权到 `1000:1000`，不得用 `docker inspect .Config.User` 的空值推断应用以 root 运行。
+
 ## 更新前
 
 1. 记录应用镜像、容器 ID、启动时间、健康状态、重启次数和无关容器基线。
@@ -28,6 +30,9 @@
 systemctl is-active sub2api-updater.service
 curl --unix-socket /run/sub2api-updater/updater.sock http://localhost/v1/health
 curl --unix-socket /run/sub2api-updater/updater.sock http://localhost/v1/status
+docker exec sub2api sh -c "grep -E '^(Uid|Gid|Groups):' /proc/1/status"
+stat -c '%A|%a|%U|%G|%u|%g|%n' /run/sub2api-updater/updater.sock
+docker exec -u 1000:1000 sub2api sh -c '[ -w /run/sub2api-updater/updater.sock ]'
 ```
 
 Prepare 只拉取并验证精确镜像；Activate 只重建 `sub2api`。用户要求自行更新时，不调用两者。

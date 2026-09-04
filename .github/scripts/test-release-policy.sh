@@ -42,8 +42,15 @@ require_file "$workflow"
 require_file "$goreleaser"
 require_file "$version_file"
 require_file ".github/scripts/validate-release-version.sh"
+require_file "deploy/updater/install.sh"
+require_file "deploy/updater/sub2api_updater.py"
+require_file "deploy/updater/updater_core.py"
+require_file "deploy/updater/sub2api-updater.service"
+require_file "deploy/updater/config.example.json"
+require_file "deploy/updater/README.md"
 require_contains ".github/workflows/backend-ci.yml" '.github/scripts/test-validate-release-version.sh'
 require_contains ".github/workflows/backend-ci.yml" '.github/scripts/test-release-policy.sh'
+require_contains ".github/workflows/backend-ci.yml" "python3 -m unittest discover -s deploy/updater/tests -p 'test_*.py'"
 
 require_exact_line "$version_file" "0.2.0"
 require_exact_line "deploy/.env.example" "SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.0"
@@ -85,6 +92,14 @@ require_absent "deploy/docker-deploy.sh" 'Wei-Shaw/sub2api'
 require_exact_line "deploy/.env.example" 'APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.0'
 require_contains "deploy/apple-container.sh" 'ghcr.io/gwenliu1025/yuluoapi:0.2.0'
 require_absent "deploy/apple-container.sh" 'weishaw/sub2api:latest'
+require_contains "deploy/updater/config.example.json" '"socket_gid": 1000'
+require_contains "deploy/updater/config.example.json" '"image_repository": "ghcr.io/gwenliu1025/yuluoapi"'
+require_contains "deploy/updater/config.example.json" '"image_source": "https://github.com/gwenliu1025/yuluoapi"'
+require_contains "deploy/updater/config.example.json" '"compose_directory": "/opt/yuluoapi/deploy"'
+require_contains "deploy/updater/config.example.json" '"environment_file": "/opt/yuluoapi/.env"'
+require_contains "deploy/updater/README.md" '--app-uid 1000'
+require_contains "deploy/updater/README.md" '--socket-gid 1000'
+require_absent "deploy/updater/config.example.json" 'gwenliu1025/sub2api'
 
 require_exact_line "deploy/docker-deploy.sh" 'GITHUB_RAW_URL="https://raw.githubusercontent.com/gwenliu1025/yuluoapi/v0.2.0/deploy"'
 for release_doc in deploy/README.md deploy/DOCKER.md deploy/APPLE_CONTAINER.md; do

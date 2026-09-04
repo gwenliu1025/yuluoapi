@@ -43,6 +43,13 @@ jobs:
         working-directory: backend
         run: make test-integration
 
+  updater:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Host updater tests
+        run: python3 -m unittest discover -s deploy/updater/tests -p 'test_*.py'
+
   frontend:
     runs-on: ubuntu-latest
     steps:
