@@ -171,7 +171,7 @@ func TestCalculateCostUnified_DeepseekGroupPricingNotScaledByPeak(t *testing.T) 
 
 	tokens := UsageTokens{InputTokens: 1000, OutputTokens: 500, CacheReadTokens: 1000}
 	// 分组自定义价：1000*1e-6 + 500*2e-6 + 1000*7e-9（缓存读沿用官方 flash 价）
-	groupTotal := 1000*1e-6 + 500*2e-6 + 1000*7e-9
+	groupTotal := 1000*1e-6 + 500*2e-6 + 1000*usdToCNY(7e-9)
 
 	for _, pricingAt := range []time.Time{
 		time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC), // 低谷
@@ -192,7 +192,7 @@ func TestCalculateCostUnified_NonDeepseekDefaultCardNotScaledByPeak(t *testing.T
 	resolver := NewModelPricingResolver(nil, bs)
 
 	tokens := UsageTokens{InputTokens: 1000, OutputTokens: 500}
-	total := 1000*3e-6 + 500*15e-6 // claude-sonnet-4 fallback
+	total := usdToCNY(1000*3e-6 + 500*15e-6) // claude-sonnet-4 fallback
 
 	for _, pricingAt := range []time.Time{
 		time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC),
@@ -261,9 +261,9 @@ func TestGetModelPricing_DeepseekForcesOfficialRatesOverJSON(t *testing.T) {
 		t.Run(tt.model, func(t *testing.T) {
 			pricing, err := bs.GetModelPricing(tt.model)
 			require.NoError(t, err)
-			require.InDelta(t, tt.input, pricing.InputPricePerToken, 1e-15)
-			require.InDelta(t, tt.output, pricing.OutputPricePerToken, 1e-15)
-			require.InDelta(t, tt.cacheRead, pricing.CacheReadPricePerToken, 1e-15)
+			require.InDelta(t, usdToCNY(tt.input), pricing.InputPricePerToken, 1e-15)
+			require.InDelta(t, usdToCNY(tt.output), pricing.OutputPricePerToken, 1e-15)
+			require.InDelta(t, usdToCNY(tt.cacheRead), pricing.CacheReadPricePerToken, 1e-15)
 			require.True(t, bs.HasIdentifiedTokenPricing(tt.model))
 		})
 	}
@@ -280,9 +280,9 @@ func TestGetModelPricing_DeepseekForcesOfficialRatesOverJSON(t *testing.T) {
 		t.Run(tt.model, func(t *testing.T) {
 			pricing, err := bs.GetModelPricing(tt.model)
 			require.NoError(t, err)
-			require.InDelta(t, tt.input, pricing.InputPricePerToken, 1e-15)
-			require.InDelta(t, tt.output, pricing.OutputPricePerToken, 1e-15)
-			require.InDelta(t, tt.cacheRead, pricing.CacheReadPricePerToken, 1e-15)
+			require.InDelta(t, usdToCNY(tt.input), pricing.InputPricePerToken, 1e-15)
+			require.InDelta(t, usdToCNY(tt.output), pricing.OutputPricePerToken, 1e-15)
+			require.InDelta(t, usdToCNY(tt.cacheRead), pricing.CacheReadPricePerToken, 1e-15)
 		})
 	}
 }
@@ -299,9 +299,9 @@ func TestGetModelPricing_UnknownDeepseekMapsToFlash(t *testing.T) {
 		t.Run(m, func(t *testing.T) {
 			pricing, err := bs.GetModelPricing(m)
 			require.NoError(t, err)
-			require.InDelta(t, 2.2e-7, pricing.InputPricePerToken, 1e-15)
-			require.InDelta(t, 6.6e-7, pricing.OutputPricePerToken, 1e-15)
-			require.InDelta(t, 7e-9, pricing.CacheReadPricePerToken, 1e-15)
+			require.InDelta(t, usdToCNY(2.2e-7), pricing.InputPricePerToken, 1e-15)
+			require.InDelta(t, usdToCNY(6.6e-7), pricing.OutputPricePerToken, 1e-15)
+			require.InDelta(t, usdToCNY(7e-9), pricing.CacheReadPricePerToken, 1e-15)
 		})
 	}
 }

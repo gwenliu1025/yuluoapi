@@ -475,7 +475,7 @@ func TestTryModelFilePricing_Success(t *testing.T) {
 	result := tryModelFilePricing(bs, "claude-sonnet-4", tokens, "")
 	require.NotNil(t, result)
 	// 100*0.001 + 50*0.002 = 0.1 + 0.1 = 0.2
-	require.InDelta(t, 0.2, *result, 1e-12)
+	require.InDelta(t, usdToCNY(0.2), *result, 1e-12)
 }
 
 func TestTryModelFilePricing_AppliesLongContextPricing(t *testing.T) {
@@ -495,7 +495,7 @@ func TestTryModelFilePricing_AppliesLongContextPricing(t *testing.T) {
 
 	require.NotNil(t, result)
 	// Input and cache-read use the 2x input tier; output uses the 1.5x tier.
-	require.InDelta(t, 0.233, *result, 1e-12)
+	require.InDelta(t, usdToCNY(0.233), *result, 1e-12)
 }
 
 func TestTryModelFilePricing_AppliesServiceTierPricing(t *testing.T) {
@@ -532,7 +532,7 @@ func TestTryModelFilePricing_AppliesServiceTierPricing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tryModelFilePricing(bs, "gpt-5.6-sol", tokens, tt.serviceTier)
 			require.NotNil(t, result)
-			require.InDelta(t, tt.want, *result, 1e-12)
+			require.InDelta(t, usdToCNY(tt.want), *result, 1e-12)
 		})
 	}
 }
@@ -564,7 +564,7 @@ func TestTryModelFilePricing_CombinesPriorityAndLongContextPricing(t *testing.T)
 
 	require.NotNil(t, result)
 	// priority 单价先应用，再叠加长上下文输入 2x、输出 1.5x。
-	require.InDelta(t, 0.534, *result, 1e-12)
+	require.InDelta(t, usdToCNY(0.534), *result, 1e-12)
 }
 
 func TestTryModelFilePricing_PricingNotFound(t *testing.T) {
@@ -614,7 +614,7 @@ func TestTryModelFilePricing_WithImageOutput(t *testing.T) {
 	require.NotNil(t, result)
 	// ImageOutputTokens 是 OutputTokens 的子集，先扣除再按图片单价计。
 	// 100*0.001 + (50-10)*0.002 + 10*0.01 = 0.1 + 0.08 + 0.1 = 0.28
-	require.InDelta(t, 0.28, *result, 1e-12)
+	require.InDelta(t, usdToCNY(0.28), *result, 1e-12)
 }
 
 func TestTryModelFilePricing_WithCacheTokens(t *testing.T) {
@@ -636,7 +636,7 @@ func TestTryModelFilePricing_WithCacheTokens(t *testing.T) {
 	require.NotNil(t, result)
 	// 100*0.001 + 50*0.002 + 200*0.003 + 300*0.0005
 	// = 0.1 + 0.1 + 0.6 + 0.15 = 0.95
-	require.InDelta(t, 0.95, *result, 1e-12)
+	require.InDelta(t, usdToCNY(0.95), *result, 1e-12)
 }
 
 // ---------------------------------------------------------------------------
@@ -784,7 +784,7 @@ func TestResolveAccountStatsCost_FallsBackToLiteLLM(t *testing.T) {
 	)
 	require.NotNil(t, result)
 	// 100*0.001 + 50*0.002 = 0.1 + 0.1 = 0.2
-	require.InDelta(t, 0.2, *result, 1e-12)
+	require.InDelta(t, usdToCNY(0.2), *result, 1e-12)
 }
 
 func TestResolveAccountStatsCost_FallbackHonorsAnthropicFast(t *testing.T) {
@@ -804,7 +804,7 @@ func TestResolveAccountStatsCost_FallbackHonorsAnthropicFast(t *testing.T) {
 		1, 0, "fast",
 	)
 	require.NotNil(t, result)
-	require.InDelta(t, 60, *result, 1e-12)
+	require.InDelta(t, usdToCNY(60), *result, 1e-12)
 }
 
 func TestResolveAccountStatsCost_Gemini36FlashTierUsesFallbackPricing(t *testing.T) {
@@ -823,7 +823,7 @@ func TestResolveAccountStatsCost_Gemini36FlashTierUsesFallbackPricing(t *testing
 		UsageTokens{InputTokens: 1_000_000, OutputTokens: 1_000_000, CacheReadTokens: 1_000_000}, 1, 0, "",
 	)
 	require.NotNil(t, result)
-	require.InDelta(t, 9.15, *result, 1e-12)
+	require.InDelta(t, usdToCNY(9.15), *result, 1e-12)
 }
 
 func TestResolveAccountStatsCost_AllMiss_ReturnsNil(t *testing.T) {
@@ -926,7 +926,7 @@ func TestApplyAccountStatsCost_UsesUsageLogServiceTier(t *testing.T) {
 	)
 
 	require.NotNil(t, usageLog.AccountStatsCost)
-	require.InDelta(t, 0.4, *usageLog.AccountStatsCost, 1e-12)
+	require.InDelta(t, usdToCNY(0.4), *usageLog.AccountStatsCost, 1e-12)
 }
 
 // ---------------------------------------------------------------------------

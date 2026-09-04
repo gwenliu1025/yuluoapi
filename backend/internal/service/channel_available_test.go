@@ -213,7 +213,7 @@ func TestSynthesizePricingFromLiteLLM_TokenMode(t *testing.T) {
 	require.NotNil(t, got)
 	require.Equal(t, BillingModeToken, got.BillingMode)
 	require.NotNil(t, got.InputPrice)
-	require.InDelta(t, 3e-6, *got.InputPrice, 1e-12)
+	require.InDelta(t, usdToCNY(3e-6), *got.InputPrice, 1e-12)
 	require.NotNil(t, got.CacheReadPrice)
 }
 
@@ -243,7 +243,7 @@ func TestSynthesizePricingFromLiteLLM_RespectsExistingChannelMode(t *testing.T) 
 	require.NotNil(t, got)
 	require.Equal(t, BillingModePerRequest, got.BillingMode)
 	require.NotNil(t, got.PerRequestPrice)
-	require.InDelta(t, 0.04, *got.PerRequestPrice, 1e-12)
+	require.InDelta(t, usdToCNY(0.04), *got.PerRequestPrice, 1e-12)
 }
 
 func TestFillGlobalPricingFallback_NilPricing(t *testing.T) {
@@ -258,7 +258,7 @@ func TestFillGlobalPricingFallback_NilPricing(t *testing.T) {
 	fillGlobalPricingFallback(svc.pricingService, models)
 	require.NotNil(t, models[0].Pricing)
 	require.NotNil(t, models[0].Pricing.InputPrice)
-	require.InDelta(t, 5e-6, *models[0].Pricing.InputPrice, 1e-12)
+	require.InDelta(t, usdToCNY(5e-6), *models[0].Pricing.InputPrice, 1e-12)
 }
 
 func TestFillGlobalPricingFallback_EmptyPricingFillsFromLiteLLM(t *testing.T) {
@@ -285,7 +285,7 @@ func TestFillGlobalPricingFallback_EmptyPricingFillsFromLiteLLM(t *testing.T) {
 	require.NotNil(t, models[0].Pricing)
 	require.Equal(t, BillingModeImage, models[0].Pricing.BillingMode)
 	require.NotNil(t, models[0].Pricing.ImageOutputPrice)
-	require.InDelta(t, 4e-5, *models[0].Pricing.ImageOutputPrice, 1e-12)
+	require.InDelta(t, usdToCNY(4e-5), *models[0].Pricing.ImageOutputPrice, 1e-12)
 }
 
 func TestFillGlobalPricingFallback_KeepsExistingPrice(t *testing.T) {
