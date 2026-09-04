@@ -41,11 +41,13 @@ func TestUsageUnrestrictedIncludesWeeklyWindowStart(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	var response struct {
+		Unit         string `json:"unit"`
 		Subscription struct {
 			WeeklyWindowStart *time.Time `json:"weekly_window_start"`
 		} `json:"subscription"`
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	require.Equal(t, service.BillingCurrency, response.Unit)
 	require.NotNil(t, response.Subscription.WeeklyWindowStart)
 	require.True(t, weeklyWindowStart.Equal(*response.Subscription.WeeklyWindowStart))
 }

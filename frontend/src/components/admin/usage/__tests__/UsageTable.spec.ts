@@ -266,10 +266,10 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('Account rate')
     expect(text).toContain('User billed')
     expect(text).toContain('Account billed')
-    expect(text).toContain('$0.092883')
-    expect(text).toContain('$5.0000 / 1M tokens')
-    expect(text).toContain('$30.0000 / 1M tokens')
-    expect(text).toContain('$0.069568')
+    expect(text).toContain('¥0.092883')
+    expect(text).toContain('¥5.0000 / 1M tokens')
+    expect(text).toContain('¥30.0000 / 1M tokens')
+    expect(text).toContain('¥0.069568')
   })
 
   it('shows requested and upstream models separately for admin rows', () => {
@@ -405,7 +405,7 @@ describe('admin UsageTable tooltip', () => {
 		const wrapper = mount(UsageTable, {
 			props: {
 				data: [{
-					request_id: `req-${responseModel}`,
+					request_id: `req-¥{responseModel}`,
 					model: 'gpt-5.6-sol',
 					upstream_model: 'gpt-5.5',
 					model_mapping_chain: 'gpt-5.6-sol→gpt-5.5',

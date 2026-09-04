@@ -2474,13 +2474,13 @@ func (a *Account) GetCacheTTLOverrideTarget() string {
 	return "5m"
 }
 
-// GetQuotaLimit 获取 API Key 账号的配额限制（美元）
+// GetQuotaLimit 获取 API Key 账号的配额限制（人民币）。
 // 返回 0 表示未启用
 func (a *Account) GetQuotaLimit() float64 {
 	return a.getExtraFloat64("quota_limit")
 }
 
-// GetQuotaUsed 获取 API Key 账号的已用配额（美元）
+// GetQuotaUsed 获取 API Key 账号的已用配额（人民币）。
 func (a *Account) GetQuotaUsed() float64 {
 	return a.getExtraFloat64("quota_used")
 }

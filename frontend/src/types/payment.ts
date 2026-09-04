@@ -68,7 +68,7 @@ export interface CheckoutInfoResponse {
   plans: SubscriptionPlan[]
   balance_disabled: boolean
   balance_recharge_multiplier: number
-  /** Subscription CNY conversion rate (1 USD = X CNY); 0 = disabled, plan price is charged as-is */
+  /** Legacy subscription conversion rate; fixed at 0 because plan prices are stored and charged in CNY */
   subscription_usd_to_cny_rate: number
   recharge_fee_rate: number
   help_text: string

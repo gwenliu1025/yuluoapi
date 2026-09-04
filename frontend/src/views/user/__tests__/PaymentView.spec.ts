@@ -328,8 +328,8 @@ describe('PaymentView recharge rate preview', () => {
       currency: 'USD',
       usd: '0.50',
     })
-    expect(en.payment.rechargeRatePreview).toBe('Current rate: 1 {currency} = {usd} USD')
-    expect(zh.payment.rechargeRatePreview).toBe('当前倍率：1 {currency} = {usd} USD')
+    expect(en.payment.rechargeRatePreview).toBe('Current rate: 1 {currency} = {usd} CNY balance')
+    expect(zh.payment.rechargeRatePreview).toBe('当前倍率：1 {currency} = {usd} CNY 余额')
   })
 })
 

@@ -1141,10 +1141,10 @@ func TestOpenAIGatewayServiceRecordUsage_GPT56SeparatesCacheWriteForBillingAndSt
 	require.Equal(t, 200, usageRepo.lastLog.CacheCreationTokens)
 	require.Equal(t, 100, usageRepo.lastLog.CacheReadTokens)
 	require.Equal(t, 1050, usageRepo.lastLog.TotalTokens())
-	require.InDelta(t, 700*5e-6, usageRepo.lastLog.InputCost, 1e-12)
-	require.InDelta(t, 200*6.25e-6, usageRepo.lastLog.CacheCreationCost, 1e-12)
-	require.InDelta(t, 100*0.5e-6, usageRepo.lastLog.CacheReadCost, 1e-12)
-	require.InDelta(t, 50*30e-6, usageRepo.lastLog.OutputCost, 1e-12)
+	require.InDelta(t, usdToCNY(700*5e-6), usageRepo.lastLog.InputCost, 1e-12)
+	require.InDelta(t, usdToCNY(200*6.25e-6), usageRepo.lastLog.CacheCreationCost, 1e-12)
+	require.InDelta(t, usdToCNY(100*0.5e-6), usageRepo.lastLog.CacheReadCost, 1e-12)
+	require.InDelta(t, usdToCNY(50*30e-6), usageRepo.lastLog.OutputCost, 1e-12)
 	require.InDelta(t, usageRepo.lastLog.TotalCost*1.1, usageRepo.lastLog.ActualCost, 1e-12)
 }
 
@@ -1172,8 +1172,8 @@ func TestOpenAIGatewayServiceRecordUsage_Gpt54LongContextBillingDisabledWhenGrou
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 
-	expectedInput := 300000 * 2.5e-6
-	expectedOutput := 2000 * 15e-6
+	expectedInput := usdToCNY(300000 * 2.5e-6)
+	expectedOutput := usdToCNY(2000 * 15e-6)
 	require.InDelta(t, expectedInput, usageRepo.lastLog.InputCost, 1e-10)
 	require.InDelta(t, expectedOutput, usageRepo.lastLog.OutputCost, 1e-10)
 	require.InDelta(t, expectedInput+expectedOutput, usageRepo.lastLog.TotalCost, 1e-10)
@@ -1220,8 +1220,8 @@ func TestOpenAIGatewayServiceRecordUsage_Gpt54LongContextBillingEnabledPerAccoun
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 
-	expectedInput := 300000 * 2.5e-6 * 2.0
-	expectedOutput := 2000 * 15e-6 * 1.5
+	expectedInput := usdToCNY(300000 * 2.5e-6 * 2.0)
+	expectedOutput := usdToCNY(2000 * 15e-6 * 1.5)
 	require.InDelta(t, expectedInput, usageRepo.lastLog.InputCost, 1e-10)
 	require.InDelta(t, expectedOutput, usageRepo.lastLog.OutputCost, 1e-10)
 	require.InDelta(t, expectedInput+expectedOutput, usageRepo.lastLog.TotalCost, 1e-10)
@@ -1231,8 +1231,8 @@ func TestOpenAIGatewayServiceRecordUsage_Gpt54LongContextBillingEnabledPerAccoun
 
 func TestOpenAIGatewayServiceRecordUsage_GroupOrAccountLongContextAllows(t *testing.T) {
 	tokens := OpenAIUsage{InputTokens: 300000, OutputTokens: 2000}
-	baseInput := 300000 * 2.5e-6
-	baseOutput := 2000 * 15e-6
+	baseInput := usdToCNY(300000 * 2.5e-6)
+	baseOutput := usdToCNY(2000 * 15e-6)
 
 	t.Run("group on account off", func(t *testing.T) {
 		usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
@@ -1293,8 +1293,8 @@ func TestOpenAIGatewayServiceRecordUsage_GroupOrAccountLongContextAllows(t *test
 // must not veto the official Grok >=200k ladder: a Grok account has no way to
 // ever set that flag, which would make the group toggle unreachable.
 func TestOpenAIGatewayServiceRecordUsage_GrokLongContextFollowsGroupToggleOnly(t *testing.T) {
-	baseInput := 250000 * 2e-6
-	baseOutput := 1000 * 6e-6
+	baseInput := usdToCNY(250000 * 2e-6)
+	baseOutput := usdToCNY(1000 * 6e-6)
 
 	grokAccount := func(id int64) *Account {
 		return &Account{ID: id, Platform: PlatformGrok, Type: AccountTypeOAuth}
@@ -2354,9 +2354,9 @@ func TestOpenAIGatewayServiceRecordUsage_GrokVideoUsesDefaultRateCard(t *testing
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 	require.Nil(t, usageRepo.lastLog.ImageSize)
-	// 结果未携带 duration 时按上游默认 8 秒计费：0.14 USD/s × 8s。
-	require.InDelta(t, 0.14*8, usageRepo.lastLog.TotalCost, 1e-12)
-	require.InDelta(t, 0.14*8, usageRepo.lastLog.ActualCost, 1e-12)
+	// 结果未携带 duration 时按上游默认 8 秒计费：官方美元价换算为 CNY 后 × 8s。
+	require.InDelta(t, usdToCNY(0.14*8), usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, usdToCNY(0.14*8), usageRepo.lastLog.ActualCost, 1e-12)
 	require.Equal(t, 0, usageRepo.lastLog.ImageCount)
 	require.NotNil(t, usageRepo.lastLog.BillingMode)
 	require.Equal(t, string(BillingModeVideo), *usageRepo.lastLog.BillingMode)

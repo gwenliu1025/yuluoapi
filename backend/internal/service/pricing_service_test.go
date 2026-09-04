@@ -107,23 +107,23 @@ func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.
 
 			pricing, err := svc.GetModelPricing(tt.model)
 			require.NoError(t, err)
-			require.InDelta(t, tt.input*1.25, pricing.CacheCreationPricePerToken, 1e-12)
-			require.InDelta(t, tt.inputPriority*1.25, pricing.CacheCreationPricePerTokenPriority, 1e-12)
+			require.InDelta(t, usdToCNY(tt.input*1.25), pricing.CacheCreationPricePerToken, 1e-12)
+			require.InDelta(t, usdToCNY(tt.inputPriority*1.25), pricing.CacheCreationPricePerTokenPriority, 1e-12)
 			// 阶梯由目录数据驱动：条目无 above/long_context 字段时不再由策略强补。
 			require.Zero(t, pricing.LongContextInputThreshold)
 
 			tokens := UsageTokens{InputTokens: 700, OutputTokens: 50, CacheCreationTokens: 200, CacheReadTokens: 100}
 			standard, err := svc.CalculateCostWithServiceTier(tt.model, tokens, 1, "")
 			require.NoError(t, err)
-			require.InDelta(t, 200*tt.input*1.25, standard.CacheCreationCost, 1e-12)
+			require.InDelta(t, usdToCNY(200*tt.input*1.25), standard.CacheCreationCost, 1e-12)
 
 			priority, err := svc.CalculateCostWithServiceTier(tt.model, tokens, 1, "priority")
 			require.NoError(t, err)
-			require.InDelta(t, 200*tt.inputPriority*1.25, priority.CacheCreationCost, 1e-12)
+			require.InDelta(t, usdToCNY(200*tt.inputPriority*1.25), priority.CacheCreationCost, 1e-12)
 
 			flex, err := svc.CalculateCostWithServiceTier(tt.model, tokens, 1, "flex")
 			require.NoError(t, err)
-			require.InDelta(t, 200*tt.input*1.25*0.5, flex.CacheCreationCost, 1e-12)
+			require.InDelta(t, usdToCNY(200*tt.input*1.25*0.5), flex.CacheCreationCost, 1e-12)
 		})
 	}
 }
@@ -189,10 +189,10 @@ func TestBillingService_GPT56UsesLongContextPricingAcrossModelsAndTiers(t *testi
 				}
 				cost, err := svc.CalculateCostWithServiceTier(model.name, tokens, 1, serviceTier)
 				require.NoError(t, err)
-				require.InDelta(t, float64(tokens.InputTokens)*model.input*tier.priceScale*2, cost.InputCost, 1e-12)
-				require.InDelta(t, float64(tokens.CacheCreationTokens)*model.cacheWrite*tier.priceScale*2, cost.CacheCreationCost, 1e-12)
-				require.InDelta(t, float64(tokens.CacheReadTokens)*model.cached*tier.priceScale*2, cost.CacheReadCost, 1e-12)
-				require.InDelta(t, float64(tokens.OutputTokens)*model.output*tier.priceScale*1.5, cost.OutputCost, 1e-12)
+				require.InDelta(t, usdToCNY(float64(tokens.InputTokens)*model.input*tier.priceScale*2), cost.InputCost, 1e-12)
+				require.InDelta(t, usdToCNY(float64(tokens.CacheCreationTokens)*model.cacheWrite*tier.priceScale*2), cost.CacheCreationCost, 1e-12)
+				require.InDelta(t, usdToCNY(float64(tokens.CacheReadTokens)*model.cached*tier.priceScale*2), cost.CacheReadCost, 1e-12)
+				require.InDelta(t, usdToCNY(float64(tokens.OutputTokens)*model.output*tier.priceScale*1.5), cost.OutputCost, 1e-12)
 			})
 		}
 	}
@@ -204,10 +204,10 @@ func TestBillingService_GPT56LongContextBoundaryIsExclusive(t *testing.T) {
 
 	cost, err := svc.CalculateCost("gpt-5.6-sol", tokens, 1)
 	require.NoError(t, err)
-	require.InDelta(t, 100000*5e-6, cost.InputCost, 1e-12)
-	require.InDelta(t, 100000*6.25e-6, cost.CacheCreationCost, 1e-12)
-	require.InDelta(t, 72000*0.5e-6, cost.CacheReadCost, 1e-12)
-	require.InDelta(t, 10*30e-6, cost.OutputCost, 1e-12)
+	require.InDelta(t, usdToCNY(100000*5e-6), cost.InputCost, 1e-12)
+	require.InDelta(t, usdToCNY(100000*6.25e-6), cost.CacheCreationCost, 1e-12)
+	require.InDelta(t, usdToCNY(72000*0.5e-6), cost.CacheReadCost, 1e-12)
+	require.InDelta(t, usdToCNY(10*30e-6), cost.OutputCost, 1e-12)
 }
 
 func TestPricingService_BareGPT56AliasDeterministicallyUsesSol(t *testing.T) {
@@ -230,8 +230,8 @@ func TestPricingService_BareGPT56AliasDeterministicallyUsesSol(t *testing.T) {
 	for _, alias := range []string{"gpt-5.6", "openai/gpt-5.6"} {
 		pricing, err := billingSvc.GetModelPricing(alias)
 		require.NoError(t, err)
-		require.InDelta(t, 5e-6, pricing.InputPricePerToken, 1e-12)
-		require.InDelta(t, 6.25e-6, pricing.CacheCreationPricePerToken, 1e-12)
+		require.InDelta(t, usdToCNY(5e-6), pricing.InputPricePerToken, 1e-12)
+		require.InDelta(t, usdToCNY(6.25e-6), pricing.CacheCreationPricePerToken, 1e-12)
 	}
 }
 
@@ -258,14 +258,14 @@ func TestDefaultPricingIncludesOfficialGPT56Rates(t *testing.T) {
 		t.Run(tt.model, func(t *testing.T) {
 			pricing, err := billingSvc.GetModelPricing(tt.model)
 			require.NoError(t, err)
-			require.InDelta(t, tt.input, pricing.InputPricePerToken, 1e-12)
-			require.InDelta(t, tt.cached, pricing.CacheReadPricePerToken, 1e-12)
-			require.InDelta(t, tt.cacheWrite, pricing.CacheCreationPricePerToken, 1e-12)
-			require.InDelta(t, tt.output, pricing.OutputPricePerToken, 1e-12)
-			require.InDelta(t, tt.inputPriority, pricing.InputPricePerTokenPriority, 1e-12)
-			require.InDelta(t, tt.cachedPriority, pricing.CacheReadPricePerTokenPriority, 1e-12)
-			require.InDelta(t, tt.cacheWritePriority, pricing.CacheCreationPricePerTokenPriority, 1e-12)
-			require.InDelta(t, tt.outputPriority, pricing.OutputPricePerTokenPriority, 1e-12)
+			require.InDelta(t, usdToCNY(tt.input), pricing.InputPricePerToken, 1e-12)
+			require.InDelta(t, usdToCNY(tt.cached), pricing.CacheReadPricePerToken, 1e-12)
+			require.InDelta(t, usdToCNY(tt.cacheWrite), pricing.CacheCreationPricePerToken, 1e-12)
+			require.InDelta(t, usdToCNY(tt.output), pricing.OutputPricePerToken, 1e-12)
+			require.InDelta(t, usdToCNY(tt.inputPriority), pricing.InputPricePerTokenPriority, 1e-12)
+			require.InDelta(t, usdToCNY(tt.cachedPriority), pricing.CacheReadPricePerTokenPriority, 1e-12)
+			require.InDelta(t, usdToCNY(tt.cacheWritePriority), pricing.CacheCreationPricePerTokenPriority, 1e-12)
+			require.InDelta(t, usdToCNY(tt.outputPriority), pricing.OutputPricePerTokenPriority, 1e-12)
 			require.Equal(t, 272000, pricing.LongContextInputThreshold)
 			require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
 			require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
@@ -305,10 +305,10 @@ func TestGPT56DedicatedFallbacksUseOfficialRates(t *testing.T) {
 
 func assertGPT56FallbackPricing(t *testing.T, pricing *ModelPricing, input, cached, cacheWrite, output float64) {
 	t.Helper()
-	require.InDelta(t, input, pricing.InputPricePerToken, 1e-12)
-	require.InDelta(t, cached, pricing.CacheReadPricePerToken, 1e-12)
-	require.InDelta(t, cacheWrite, pricing.CacheCreationPricePerToken, 1e-12)
-	require.InDelta(t, output, pricing.OutputPricePerToken, 1e-12)
+	require.InDelta(t, usdToCNY(input), pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, usdToCNY(cached), pricing.CacheReadPricePerToken, 1e-12)
+	require.InDelta(t, usdToCNY(cacheWrite), pricing.CacheCreationPricePerToken, 1e-12)
+	require.InDelta(t, usdToCNY(output), pricing.OutputPricePerToken, 1e-12)
 	// 静态兜底只兜基础价；阶梯由目录数据（above_272k 折算或显式字段）驱动。
 	require.Zero(t, pricing.LongContextInputThreshold)
 }
@@ -525,10 +525,10 @@ func TestBillingService_Gemini36FlashThinkingTierFallbacksAreBillable(t *testing
 		t.Run(model, func(t *testing.T) {
 			cost, err := svc.CalculateCost(model, tokens, 1)
 			require.NoError(t, err)
-			require.InDelta(t, 1.5, cost.InputCost, 1e-12)
-			require.InDelta(t, 7.5, cost.OutputCost, 1e-12)
-			require.InDelta(t, 0.15, cost.CacheReadCost, 1e-12)
-			require.InDelta(t, 9.15, cost.TotalCost, 1e-12)
+			require.InDelta(t, usdToCNY(1.5), cost.InputCost, 1e-12)
+			require.InDelta(t, usdToCNY(7.5), cost.OutputCost, 1e-12)
+			require.InDelta(t, usdToCNY(0.15), cost.CacheReadCost, 1e-12)
+			require.InDelta(t, usdToCNY(9.15), cost.TotalCost, 1e-12)
 		})
 	}
 }
@@ -547,9 +547,9 @@ func TestDefaultPricingIncludesGemini36FlashRates(t *testing.T) {
 		t.Run(model, func(t *testing.T) {
 			pricing, err := billingSvc.GetModelPricing(model)
 			require.NoError(t, err)
-			require.InDelta(t, 1.5e-6, pricing.InputPricePerToken, 1e-12)
-			require.InDelta(t, 7.5e-6, pricing.OutputPricePerToken, 1e-12)
-			require.InDelta(t, 0.15e-6, pricing.CacheReadPricePerToken, 1e-12)
+			require.InDelta(t, usdToCNY(1.5e-6), pricing.InputPricePerToken, 1e-12)
+			require.InDelta(t, usdToCNY(7.5e-6), pricing.OutputPricePerToken, 1e-12)
+			require.InDelta(t, usdToCNY(0.15e-6), pricing.CacheReadPricePerToken, 1e-12)
 		})
 	}
 }
@@ -962,9 +962,9 @@ func TestCalculateCost_PartialLongContextMultiplierDefaultsToOne(t *testing.T) {
 		cost, err := svc.CalculateCost("partial-in", tokens, 1.0)
 		require.NoError(t, err)
 		require.True(t, cost.LongContextBillingApplied)
-		require.InDelta(t, 300000*2e-6*2, cost.InputCost, 1e-10)
-		require.InDelta(t, 1000*1e-5, cost.OutputCost, 1e-10, "缺失的 output 倍率按 1 计，不得为 0")
-		require.InDelta(t, 10000*2e-7*2, cost.CacheReadCost, 1e-10)
+		require.InDelta(t, usdToCNY(300000*2e-6*2), cost.InputCost, 1e-10)
+		require.InDelta(t, usdToCNY(1000*1e-5), cost.OutputCost, 1e-10, "缺失的 output 倍率按 1 计，不得为 0")
+		require.InDelta(t, usdToCNY(10000*2e-7*2), cost.CacheReadCost, 1e-10)
 	})
 
 	t.Run("only output multiplier", func(t *testing.T) {
@@ -978,9 +978,9 @@ func TestCalculateCost_PartialLongContextMultiplierDefaultsToOne(t *testing.T) {
 		cost, err := svc.CalculateCost("partial-out", tokens, 1.0)
 		require.NoError(t, err)
 		require.True(t, cost.LongContextBillingApplied)
-		require.InDelta(t, 300000*2e-6, cost.InputCost, 1e-10, "缺失的 input 倍率按 1 计，不得为 0")
-		require.InDelta(t, 1000*1e-5*1.5, cost.OutputCost, 1e-10)
-		require.InDelta(t, 10000*2e-7, cost.CacheReadCost, 1e-10, "cache_read 跟随 input 倍率，同样按 1 计")
+		require.InDelta(t, usdToCNY(300000*2e-6), cost.InputCost, 1e-10, "缺失的 input 倍率按 1 计，不得为 0")
+		require.InDelta(t, usdToCNY(1000*1e-5*1.5), cost.OutputCost, 1e-10)
+		require.InDelta(t, usdToCNY(10000*2e-7), cost.CacheReadCost, 1e-10, "cache_read 跟随 input 倍率，同样按 1 计")
 	})
 }
 
@@ -1005,8 +1005,8 @@ func TestCalculateCost_ClaudeSonnetCatalogLadderIsDataDriven(t *testing.T) {
 	cost, err := svc.CalculateCost("claude-sonnet-4-5", over, 1.0)
 	require.NoError(t, err)
 	require.True(t, cost.LongContextBillingApplied)
-	require.InDelta(t, 250000*3e-6*2, cost.InputCost, 1e-10)
-	require.InDelta(t, 1000*1.5e-5*1.5, cost.OutputCost, 1e-10)
+	require.InDelta(t, usdToCNY(250000*3e-6*2), cost.InputCost, 1e-10)
+	require.InDelta(t, usdToCNY(1000*1.5e-5*1.5), cost.OutputCost, 1e-10)
 
 	under := UsageTokens{InputTokens: 200000, OutputTokens: 1000}
 	cost, err = svc.CalculateCost("claude-sonnet-4-5", under, 1.0)

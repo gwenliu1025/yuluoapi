@@ -54,9 +54,9 @@ func TestPricingOverride_ExplicitZeroThresholdDisablesCatalogLadder(t *testing.T
 	cost, err := billing.CalculateCost("gpt-5.5", tokens, 1)
 	require.NoError(t, err)
 	require.False(t, cost.LongContextBillingApplied)
-	require.InDelta(t, 300000*5e-6, cost.InputCost, 1e-10)
-	require.InDelta(t, 1000*3e-5, cost.OutputCost, 1e-10)
-	require.InDelta(t, 10000*5e-7, cost.CacheReadCost, 1e-10)
+	require.InDelta(t, usdToCNY(300000*5e-6), cost.InputCost, 1e-10)
+	require.InDelta(t, usdToCNY(1000*3e-5), cost.OutputCost, 1e-10)
+	require.InDelta(t, usdToCNY(10000*5e-7), cost.CacheReadCost, 1e-10)
 }
 
 func TestPricingOverride_FieldLevelMergeKeepsOtherFields(t *testing.T) {
@@ -192,7 +192,7 @@ func TestPricingOverride_DisablesGPT55LadderOnDefaultCatalog(t *testing.T) {
 		pricing, err := billing.GetModelPricing(model)
 		require.NoError(t, err)
 		require.Zero(t, pricing.LongContextInputThreshold, model)
-		require.InDelta(t, 5e-6, pricing.InputPricePerToken, 1e-12, model)
+		require.InDelta(t, usdToCNY(5e-6), pricing.InputPricePerToken, 1e-12, model)
 	}
 
 	pricing, err := billing.GetModelPricing("gpt-5.4")

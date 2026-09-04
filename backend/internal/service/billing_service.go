@@ -91,28 +91,29 @@ type BillingCache interface {
 	BatchGetUserPlatformQuotaCache(ctx context.Context, keys []UserPlatformQuotaKey) ([]*UserPlatformQuotaCacheEntry, error)
 }
 
-// ModelPricing 模型价格配置（per-token价格，与LiteLLM格式一致）
+// ModelPricing 模型价格配置（per-token 价格）。BillingService 对外统一返回 CNY；
+// LiteLLM 与内置官方价卡在读取边界从 USD 换算。
 type ModelPricing struct {
-	InputPricePerToken                 float64  // 每token输入价格 (USD)
-	InputPricePerTokenPriority         float64  // priority service tier 下每token输入价格 (USD)
-	ImageInputPricePerToken            float64  // 图片输入 token 价格 (USD)，用于多模态 embedding 等图文不同价场景；为 0 时回退到 InputPricePerToken
-	OutputPricePerToken                float64  // 每token输出价格 (USD)
-	OutputPricePerTokenPriority        float64  // priority service tier 下每token输出价格 (USD)
-	CacheCreationPricePerToken         float64  // 缓存创建每token价格 (USD)
-	CacheCreationPricePerTokenPriority float64  // priority service tier 下缓存创建每token价格 (USD)
+	InputPricePerToken                 float64  // 每 token 输入价格 (CNY)
+	InputPricePerTokenPriority         float64  // priority service tier 下每 token 输入价格 (CNY)
+	ImageInputPricePerToken            float64  // 图片输入 token 价格 (CNY)；为 0 时回退到 InputPricePerToken
+	OutputPricePerToken                float64  // 每 token 输出价格 (CNY)
+	OutputPricePerTokenPriority        float64  // priority service tier 下每 token 输出价格 (CNY)
+	CacheCreationPricePerToken         float64  // 缓存创建每 token 价格 (CNY)
+	CacheCreationPricePerTokenPriority float64  // priority service tier 下缓存创建每 token 价格 (CNY)
 	CacheCreationPriceExplicit         bool     // 是否由渠道/区间定价显式设定（为 true 时即使 == 0 也不回退）
-	CacheReadPricePerToken             float64  // 缓存读取每token价格 (USD)
-	CacheReadPricePerTokenPriority     float64  // priority service tier 下缓存读取每token价格 (USD)
+	CacheReadPricePerToken             float64  // 缓存读取每 token 价格 (CNY)
+	CacheReadPricePerTokenPriority     float64  // priority service tier 下缓存读取每 token 价格 (CNY)
 	FastMultiplier                     *float64 // 渠道显式 Fast/priority 倍率；nil 时沿用模型目录行为
 	FlexMultiplier                     *float64 // 渠道显式 Flex 倍率；nil 时沿用默认行为
-	CacheCreation5mPrice               float64  // 5分钟缓存创建每token价格 (USD)
-	CacheCreation1hPrice               float64  // 1小时缓存创建每token价格 (USD)
+	CacheCreation5mPrice               float64  // 5 分钟缓存创建每 token 价格 (CNY)
+	CacheCreation1hPrice               float64  // 1 小时缓存创建每 token 价格 (CNY)
 	SupportsCacheBreakdown             bool     // 是否支持详细的缓存分类
 	LongContextInputThreshold          int      // 超过阈值后按整次会话提升输入价格
 	LongContextThresholdInclusive      bool     // 达到阈值即应用（xAI）；默认保持严格大于以兼容既有模型
 	LongContextInputMultiplier         float64  // 长上下文整次会话输入倍率
 	LongContextOutputMultiplier        float64  // 长上下文整次会话输出倍率
-	ImageOutputPricePerToken           float64  // 图片输出 token 价格 (USD)
+	ImageOutputPricePerToken           float64  // 图片输出 token 价格 (CNY)
 	ImageOutputPriceExplicit           bool     // 是否由渠道定价显式设定（为 true 时即使 == 0 也不回退）
 }
 
@@ -1116,7 +1117,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 			price5m := litellmPricing.CacheCreationInputTokenCost
 			price1h := litellmPricing.CacheCreationInputTokenCostAbove1hr
 			enableBreakdown := price1h > 0 && price1h > price5m
-			return s.applyModelSpecificPricingPolicy(model, &ModelPricing{
+			return pricingUSDToCNY(s.applyModelSpecificPricingPolicy(model, &ModelPricing{
 				InputPricePerToken:                 litellmPricing.InputCostPerToken,
 				InputPricePerTokenPriority:         litellmPricing.InputCostPerTokenPriority,
 				OutputPricePerToken:                litellmPricing.OutputCostPerToken,
@@ -1135,7 +1136,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 				LongContextOutputMultiplier:   litellmPricing.LongContextOutputCostMultiplier,
 				ImageInputPricePerToken:       litellmPricing.InputCostPerImageToken,
 				ImageOutputPricePerToken:      litellmPricing.OutputCostPerImageToken,
-			}), nil
+			})), nil
 		}
 	}
 
@@ -1147,7 +1148,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 		if _, seen := s.fallbackWarnSeen.LoadOrStore(model, struct{}{}); !seen {
 			log.Printf("[Billing] Using fallback pricing for model: %s", model)
 		}
-		return s.applyModelSpecificPricingPolicy(model, fallback), nil
+		return pricingUSDToCNY(s.applyModelSpecificPricingPolicy(model, fallback)), nil
 	}
 
 	return nil, fmt.Errorf("%w for model: %s", ErrModelPricingUnavailable, model)
@@ -1822,7 +1823,7 @@ func (s *BillingService) CalculateWebSearchCost(callCount int, groupPrice *float
 	if callCount <= 0 {
 		return &CostBreakdown{}
 	}
-	unitPrice := defaultWebSearchPricePerCall
+	unitPrice := usdToCNY(defaultWebSearchPricePerCall)
 	if groupPrice != nil && *groupPrice >= 0 {
 		unitPrice = *groupPrice
 	}
@@ -1845,7 +1846,7 @@ func (s *BillingService) CalculateSearchCost(numCalls int, groupPricePer1k *floa
 	if numCalls <= 0 {
 		return &CostBreakdown{}
 	}
-	pricePer1k := defaultSearchPricePer1k
+	pricePer1k := usdToCNY(defaultSearchPricePer1k)
 	if groupPricePer1k != nil {
 		if *groupPricePer1k < 0 {
 			return &CostBreakdown{}
@@ -1882,17 +1883,17 @@ func (s *BillingService) CalculateAudioCost(mode string, durationOrUnits float64
 	var unitPrice float64
 	switch strings.ToLower(mode) {
 	case "realtime":
-		unitPrice = defaultAudioRealtimePricePerMin
+		unitPrice = usdToCNY(defaultAudioRealtimePricePerMin)
 		if groupConfig != nil && groupConfig.RealtimePerMin != nil {
 			unitPrice = *groupConfig.RealtimePerMin
 		}
 	case "tts":
-		unitPrice = defaultAudioTTSPricePerMillionChars
+		unitPrice = usdToCNY(defaultAudioTTSPricePerMillionChars)
 		if groupConfig != nil && groupConfig.TTSPerMChars != nil {
 			unitPrice = *groupConfig.TTSPerMChars
 		}
 	case "stt":
-		unitPrice = defaultAudioSTTPricePerHour
+		unitPrice = usdToCNY(defaultAudioSTTPricePerHour)
 		if groupConfig != nil && groupConfig.STTPerHour != nil {
 			unitPrice = *groupConfig.STTPerHour
 		}
@@ -2025,7 +2026,7 @@ func (s *BillingService) getVideoUnitPrice(model string, resolution string, grou
 // getDefaultImagePrice 获取 LiteLLM 默认图片价格
 func (s *BillingService) getDefaultImagePrice(model string, imageSize string) float64 {
 	if price, ok := getDefaultGrokImagineImagePrice(model, imageSize); ok {
-		return price
+		return usdToCNY(price)
 	}
 
 	basePrice := 0.0
@@ -2042,6 +2043,7 @@ func (s *BillingService) getDefaultImagePrice(model string, imageSize string) fl
 	if basePrice <= 0 {
 		basePrice = defaultImageGenerationPrice
 	}
+	basePrice = usdToCNY(basePrice)
 
 	// 2K 尺寸 1.5 倍，4K 尺寸翻倍
 	if imageSize == "2K" {
@@ -2056,7 +2058,7 @@ func (s *BillingService) getDefaultImagePrice(model string, imageSize string) fl
 
 func (s *BillingService) getDefaultVideoPrice(model string, resolution string) float64 {
 	if price, ok := getDefaultGrokImagineVideoPrice(model, resolution); ok {
-		return price
+		return usdToCNY(price)
 	}
 
 	// The bundled LiteLLM schema does not expose an output video generation price.

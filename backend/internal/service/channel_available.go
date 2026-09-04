@@ -181,20 +181,20 @@ func synthesizePricingFromLiteLLM(lp *LiteLLMModelPricing, existing *ChannelMode
 	if mode == BillingModeImage || mode == BillingModePerRequest {
 		return &ChannelModelPricing{
 			BillingMode:      mode,
-			PerRequestPrice:  nonZeroPtr(lp.OutputCostPerImage),
-			ImageOutputPrice: nonZeroPtr(lp.OutputCostPerImageToken),
-			InputPrice:       nonZeroPtr(lp.InputCostPerToken),
-			OutputPrice:      nonZeroPtr(lp.OutputCostPerToken),
+			PerRequestPrice:  nonZeroPtr(usdToCNY(lp.OutputCostPerImage)),
+			ImageOutputPrice: nonZeroPtr(usdToCNY(lp.OutputCostPerImageToken)),
+			InputPrice:       nonZeroPtr(usdToCNY(lp.InputCostPerToken)),
+			OutputPrice:      nonZeroPtr(usdToCNY(lp.OutputCostPerToken)),
 		}
 	}
 	return &ChannelModelPricing{
 		BillingMode:       mode,
-		InputPrice:        nonZeroPtr(lp.InputCostPerToken),
-		OutputPrice:       nonZeroPtr(lp.OutputCostPerToken),
-		CacheWritePrice:   nonZeroPtr(lp.CacheCreationInputTokenCost),
-		CacheWrite1hPrice: nonZeroPtr(lp.CacheCreationInputTokenCostAbove1hr),
-		CacheReadPrice:    nonZeroPtr(lp.CacheReadInputTokenCost),
-		ImageOutputPrice:  nonZeroPtr(lp.OutputCostPerImageToken),
+		InputPrice:        nonZeroPtr(usdToCNY(lp.InputCostPerToken)),
+		OutputPrice:       nonZeroPtr(usdToCNY(lp.OutputCostPerToken)),
+		CacheWritePrice:   nonZeroPtr(usdToCNY(lp.CacheCreationInputTokenCost)),
+		CacheWrite1hPrice: nonZeroPtr(usdToCNY(lp.CacheCreationInputTokenCostAbove1hr)),
+		CacheReadPrice:    nonZeroPtr(usdToCNY(lp.CacheReadInputTokenCost)),
+		ImageOutputPrice:  nonZeroPtr(usdToCNY(lp.OutputCostPerImageToken)),
 	}
 }
 

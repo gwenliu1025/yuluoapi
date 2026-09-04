@@ -160,3 +160,6 @@ __pycache__/
 *.pyc
 # 本地闭源插件开发目录及构建产物不进入 Sub2API 仓库
 /plugins/
+
+# 本地运行状态与内部定价，不进入公开仓库
+/CURRENT_STATE.md

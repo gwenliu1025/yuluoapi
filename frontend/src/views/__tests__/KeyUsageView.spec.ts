@@ -120,7 +120,7 @@ describe('KeyUsageView daily detail', () => {
           limit: 10,
           used: 1,
           remaining: 9,
-          unit: 'USD',
+          unit: 'CNY',
         },
         usage: {
           today: {
@@ -202,7 +202,7 @@ describe('KeyUsageView daily detail', () => {
     expect(text).toContain('200')
     expect(text).toContain('30')
     expect(text).toContain('10')
-    expect(text).toContain('$0.12')
+    expect(text).toContain('¥0.12')
 
     wrapper.unmount()
   })
