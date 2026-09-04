@@ -218,4 +218,7 @@ git fetch upstream --prune
 - 根因：首次部署只在服务器上安装了 updater，当前仓库没有承载 updater 实现；安装时又把容器的空 `Config.User` 错误解释为 root，导致 `app_uid=0`、`socket_gid=0`。仓库/GHCR 地址本身正确。
 - 正式收敛：将海外站已经运行验证的通用 updater 实现、安装器、systemd unit 和 127 项测试迁入 `deploy/updater/`；实现保持同一机制，雨落配置独立绑定 `gwenliu1025/yuluoapi`、`ghcr.io/gwenliu1025/yuluoapi` 和 `/opt/yuluoapi`。
 - 雨落安装契约固定为应用 `1000:1000`、Socket `0660 root:1000`、`allowed_uids=[0,1000]`；唯一安装和验收入口为 `deploy/updater/README.md`，CI 运行完整 updater 测试。
-- 生产当前仍保持故障现场，尚未用仓库版本重新安装 updater，也未触发 Prepare/Activate 或切换应用镜像。调查与迁移证据见 `docs/operations/2026-09-04-yuluoapi-updater-migration-evidence.md`。
+- 已用提交 `f3a72739c12ca17548ca12172d62013788d249e5` 中的正式安装器重新收敛生产 updater；变更前备份为 `/opt/yuluoapi/backups/20260904T020405Z-updater-repository-migration`。
+- 生产复验：服务 `active/enabled`，配置为 `socket_gid=1000`、`allowed_uids=[0,1000]`，Socket 为 `0660 root:1000`；以 UID/GID `1000:1000` 真实连接 `/v1/status` 返回 HTTP 200，宿主机和应用健康接口正常。
+- 本次只重启 `sub2api-updater.service`，未调用 Prepare/Activate；`sub2api`、PostgreSQL、Redis 的容器 ID、镜像、启动时间和重启次数相对备份基线全部未变，应用继续运行 `ghcr.io/gwenliu1025/yuluoapi:0.1.180`。用户可从管理端重新触发更新到 `v0.2.0`。
+- 调查、迁移和生产修复证据见 `docs/operations/2026-09-04-yuluoapi-updater-migration-evidence.md`。

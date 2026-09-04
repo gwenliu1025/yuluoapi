@@ -2,7 +2,7 @@
 
 > 日期：2026-09-04（Asia/Shanghai）
 >
-> 范围：故障只读调查、海外站通用 updater 迁移、雨落配置适配和测试；当前阶段不重新安装生产 updater，不调用 Prepare/Activate，不切换应用镜像。
+> 范围：故障只读调查、海外站通用 updater 迁移、雨落配置适配、测试，以及只重装生产 updater；不调用 Prepare/Activate，不切换应用镜像。
 
 ## 1. 生产故障证据
 
@@ -55,4 +55,27 @@ allowed_uids=[0,1000]
 
 ## 5. 生产边界
 
-本阶段未修改 `/etc/sub2api-updater/config.json`、systemd unit、`.env` 或 Compose；未重启 updater、应用、PostgreSQL 或 Redis；未调用 Prepare/Activate。生产仍运行 `ghcr.io/gwenliu1025/yuluoapi:0.1.180`。
+变更前创建 `/opt/yuluoapi/backups/20260904T020405Z-updater-repository-migration`，包含原 `/etc/sub2api-updater`、`/opt/sub2api-updater`、systemd unit、状态文件、三个容器基线和 `SHA256SUMS`。上传的仓库文件与本地 SHA-256 逐项一致。
+
+使用提交 `f3a72739c12ca17548ca12172d62013788d249e5` 的 `deploy/updater/install.sh` 重新安装：
+
+```text
+app_uid=1000
+socket_gid=1000
+allowed_uids=[0,1000]
+image_repository=ghcr.io/gwenliu1025/yuluoapi
+image_source=https://github.com/gwenliu1025/yuluoapi
+```
+
+## 6. 生产复验
+
+- `sub2api-updater.service`：`active/enabled`。
+- Socket：`0660 root:1000`。
+- 宿主机 `/v1/health`：`ready=true`；`/v1/status`：`idle`。
+- 进程降权为 UID/GID `1000:1000` 后真实连接 Socket 并请求 `/v1/status`：HTTP 200。
+- 应用：`ghcr.io/gwenliu1025/yuluoapi:0.1.180`、`running/healthy`、`RestartCount=0`。
+- `sub2api`、`sub2api-postgres`、`sub2api-redis` 的容器 ID、镜像、启动时间和重启次数与变更前基线完全一致。
+- `http://127.0.0.1:8080/health`：`{"status":"ok"}`。
+- 临时上传和验证文件已清理。
+
+本次只重启 `sub2api-updater.service`，未修改 `.env` 或 Compose，未重启应用、PostgreSQL 或 Redis，未调用 Prepare/Activate。生产应用仍为 `v0.1.180`，等待用户从管理端重新触发更新。
