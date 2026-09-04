@@ -30,7 +30,7 @@ Socket 使用 Linux `SO_PEERCRED` 校验调用方 UID。雨落容器内 `/app/su
 ## Socket API
 
 - `GET /v1/health`：返回就绪状态和协议版本。
-- `POST /v1/prepare`：接收 `{"version":"0.2.0"}`，拉取并验证目标镜像。
+- `POST /v1/prepare`：接收 `{"version":"0.2.001"}`，拉取并验证目标镜像。
 - `POST /v1/activate`：要求空请求体，返回 `202` 后由后台执行切换。
 - `GET /v1/status`：返回最后一次持久化的公开状态。
 

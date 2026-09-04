@@ -21,7 +21,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # GitHub raw content base URL
-GITHUB_RAW_URL="https://raw.githubusercontent.com/gwenliu1025/yuluoapi/v0.2.0/deploy"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/gwenliu1025/yuluoapi/v0.2.001/deploy"
 
 # Print colored message
 print_info() {
