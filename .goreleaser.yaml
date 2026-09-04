@@ -57,9 +57,9 @@ release:
     name: "{{ .Env.GITHUB_REPO_NAME }}"
   draft: false
   prerelease: auto
-  name_template: "Sub2API {{ .Version }}"
+  name_template: "雨落 API {{ .Version }}"
   header: |
-    > AI API 网关平台
+    > 雨落 API · AI API 网关平台
 
     {{ .Env.TAG_MESSAGE }}
   footer: |

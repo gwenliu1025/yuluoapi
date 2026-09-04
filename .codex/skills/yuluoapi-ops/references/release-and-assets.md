@@ -14,9 +14,9 @@ Release: https://github.com/gwenliu1025/yuluoapi/releases/tag/vX.Y.Z
 ## 同步顺序
 
 1. 核对干净工作区、三条远端、不可变 `v0.1.179` 和 `origin/main`。
-2. 获取 `origin`、`legacy`、`upstream`，确认目标上游标签和旧站 fork 的已验证合入提交。
+2. 获取 `origin`、`legacy`、`upstream`，确认目标上游标签和海外站 fork 的已验证合入提交。
 3. 以雨落 `main` 为主体合入经过验证的 fork 变更；冲突优先保留雨落仓库身份、品牌首页、更新代理与发布契约，业务代码采用目标版本并以测试证明。
-4. 检查 `gwenliu1025/sub2api`、旧镜像和旧站域名是否残留在运行配置、部署文档或发布门禁中；历史来源说明和 Go module 路径不做机械替换。
+4. 检查海外站仓库、非雨落镜像和非雨落域名是否残留在运行配置、部署文档或发布门禁中；历史来源说明和 Go module 路径不做机械替换。
 5. 完成本地测试后提交并推送 `origin/main`，等待 CI 与 Security Scan 成功。
 6. 创建指向已验证提交的 annotated tag，推送到 `origin`，等待 Release workflow 完成。
 

@@ -109,7 +109,8 @@ require_contains "$goreleaser" '      - arm64'
 require_contains "$goreleaser" 'goos: windows'
 require_contains "$goreleaser" 'format: zip'
 require_contains "$goreleaser" 'name_template: checksums.txt'
-require_contains "$goreleaser" '> AI API 网关平台'
+require_contains "$goreleaser" 'name_template: "雨落 API {{ .Version }}"'
+require_contains "$goreleaser" '> 雨落 API · AI API 网关平台'
 require_contains "$goreleaser" '## 文档'
 
 for compose in $compose_files; do

@@ -200,11 +200,13 @@ git fetch upstream --prune
 - GHCR：`ghcr.io/gwenliu1025/yuluoapi:0.1.180`。
 - 生产部署目录为 `/opt/yuluoapi`，公网业务入口为 `https://sub.yuluocloud.com`；运行状态在任何生产操作前必须重新回查。
 
-## 13. `v0.2.0` 代码汇流与发布候选（2026-09-04）
+## 13. `v0.2.0` 代码汇流与仓库发布（2026-09-04）
 
-- 来源：已验证的旧站 fork 合入提交 `50e115bd54596f538a8eb5ae3659e664a5cbc64e`，其上游父提交为官方 `v0.2.0` `aa236488351eb71e120fc2b6fb32e36b0374c918`。
+- 来源：已验证的海外站 fork 合入提交 `50e115bd54596f538a8eb5ae3659e664a5cbc64e`，其上游父提交为官方 `v0.2.0` `aa236488351eb71e120fc2b6fb32e36b0374c918`。海外站与国内雨落站是两个并行维护的站点，不使用“旧站/新站”关系描述。
 - 汇流：以雨落 `main` 为主体合入上述 fork，保留 `YuluoBrandHome.vue`、`RainMotionLayer.vue`、首页素材、GSAP 依赖、首页测试和雨落仓库发布/更新契约。
-- 版本与资产契约：`v0.2.0` → 应用 `0.2.0` → `ghcr.io/gwenliu1025/yuluoapi:0.2.0`。
+- 发布提交与 annotated `v0.2.0` 均为 `0fd350405e2eb8ba9342eecc35340b05a125ad13`；GitHub Release 展示名为“雨落 API 0.2.0”。
+- 版本与资产契约：`v0.2.0` → 应用 `0.2.0` → `ghcr.io/gwenliu1025/yuluoapi:0.2.0`；OCI index digest 为 `sha256:1fe4017fc880b3e8890ae5ef0bd3acbf086f01ba60d1ece9a6feb972f0e4fe35`。
+- 标签触发的 CI、Security Scan 与 Release workflow 均通过；6 个 Release 资产已发布，五个归档的 GitHub digest 与 `checksums.txt` 逐项一致。
 - 已通过本地 Go unit/integration、golangci-lint、前端 255 个测试文件/1850 项测试、类型检查、Lint、生产构建、部署脚本、Compose、Docker 镜像构建和 Skill 校验。
 - macOS 专用 Apple container 生命周期测试在 Windows Git Bash 中因 BSD `stat -f` 与 GNU `stat` 不兼容无法作为本机结果；GitHub CI 的 macOS runner 继续作为该项权威验证入口。
 - 仓库发布和 GHCR 结果记录在 `docs/operations/2026-09-04-yuluoapi-v0.2.0-merge-release-evidence.md`；生产仍保持 `v0.1.180`，等待用户自行更新。
