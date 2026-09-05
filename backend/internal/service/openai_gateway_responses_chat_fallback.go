@@ -67,10 +67,10 @@ func (s *OpenAIGatewayService) forwardResponsesViaRawChatCompletions(
 
 	billingModel := resolveOpenAIForwardModel(account, originalModel, "")
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
-	reasoningEffort := extractOpenAIReasoningEffortFromBody(body, upstreamModel, billingModel, originalModel)
-	// 国产模型默认 effort 补充：需要 mappedModel 判定，推迟到 billingModel 算出之后。
-	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, billingModel)
 	chatReq.Model = upstreamModel
+	if !isQwenPlusUpstreamModel(upstreamModel) {
+		chatReq.EnableThinking = nil
+	}
 	if clientStream {
 		chatReq.StreamOptions = &apicompat.ChatStreamOptions{IncludeUsage: true}
 	}
@@ -87,9 +87,15 @@ func (s *OpenAIGatewayService) forwardResponsesViaRawChatCompletions(
 		}
 		return nil, err
 	}
+	if !isQwenUpstreamModel(upstreamModel) {
+		chatBody = stripMessageOrSystemCacheControl(chatBody)
+	}
 	// Keep the final outbound tier for usage-time reconciliation. A policy
 	// filter that removes the field therefore leaves this nil.
 	serviceTier := extractOpenAIServiceTierFromBody(chatBody)
+	reasoningEffort := extractOpenAIReasoningEffortFromBody(chatBody, upstreamModel, billingModel, originalModel)
+	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, chatBody, upstreamModel)
+	explicitCache := hasEphemeralMessageOrSystemCacheControl(chatBody)
 
 	logger.L().Debug("openai responses: forwarding via raw chat completions",
 		zap.Int64("account_id", account.ID),
@@ -119,10 +125,16 @@ func (s *OpenAIGatewayService) forwardResponsesViaRawChatCompletions(
 		return s.handleErrorResponse(ctx, resp, c, account, chatBody, billingModel)
 	}
 
+	var result *OpenAIForwardResult
 	if clientStream {
-		return s.streamChatCompletionsAsResponses(c, resp, originalModel, customTools, functionTools, toolSearch, namespaceTools, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
+		result, err = s.streamChatCompletionsAsResponses(c, resp, originalModel, customTools, functionTools, toolSearch, namespaceTools, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
+	} else {
+		result, err = s.bufferChatCompletionsAsResponses(c, resp, originalModel, customTools, functionTools, toolSearch, namespaceTools, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
 	}
-	return s.bufferChatCompletionsAsResponses(c, resp, originalModel, customTools, functionTools, toolSearch, namespaceTools, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
+	if result != nil {
+		result.ExplicitCache = explicitCache
+	}
+	return result, err
 }
 
 func (s *OpenAIGatewayService) bufferChatCompletionsAsResponses(

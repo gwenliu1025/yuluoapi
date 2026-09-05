@@ -1,5 +1,5 @@
--- 用户平台维度配额表。每个 (user_id, platform) 对独立记录日/周/月三层人民币限额与用量。
--- nil limit = 不限制（沿用上层默认），0 = 显式禁用，>0 = 人民币上限。
+-- 用户平台维度配额表。每个 (user_id, platform) 对独立记录日/周/月三层 USD 限额与用量。
+-- nil limit = 不限制（沿用上层默认），0 = 显式禁用，>0 = USD 上限。
 -- 软删除：deleted_at IS NULL 的记录为活跃记录，部分唯一索引保证同用户同平台只有一条活跃配额。
 
 CREATE TABLE IF NOT EXISTS user_platform_quotas (
@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS user_platform_quotas (
     user_id              BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     platform             VARCHAR(32) NOT NULL CHECK (platform IN ('anthropic', 'openai', 'gemini', 'antigravity')),
 
-    -- 日 / 周 / 月人民币上限：NULL = 不限制，0 = 显式禁用，>0 = 上限
+    -- 日 / 周 / 月 USD 上限：NULL = 不限制，0 = 显式禁用，>0 = 上限
     daily_limit_usd      DECIMAL(20,10),
     weekly_limit_usd     DECIMAL(20,10),
     monthly_limit_usd    DECIMAL(20,10),

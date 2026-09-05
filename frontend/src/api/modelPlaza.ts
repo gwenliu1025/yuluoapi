@@ -16,8 +16,12 @@ export interface PlazaOfficialPricing {
   /** 1h 缓存写入（LiteLLM cache_creation_above_1hr），多数模型缺失。 */
   cache_write_1h_price?: number | null
   cache_read_price: number | null
+  /** 官方显式缓存读取价；非空时 cache_read_price 表示隐式读取价。 */
+  explicit_cache_read_price?: number | null
   /** 官方长上下文阶梯（多档模型才有），不受分组开关影响。 */
   intervals?: UserPricingInterval[]
+  /** 官方目录的分时倍率；仅与模型实际分时行完全匹配时用于该行对照。 */
+  time_pricing?: PlazaTimePricing
 }
 
 /**
@@ -49,6 +53,10 @@ export interface PlazaModel {
   /** 实收口径的展示定价：多档时 intervals 为各档绝对单价（已由计费服务折算）；均为标准时段价。 */
   pricing: UserSupportedModelPricing | null
   official_pricing: PlazaOfficialPricing | null
+  /** 官方目录区分思考模式时返回；缺失时保持单行旧展示。 */
+  thinking_pricing?: UserSupportedModelPricing | null
+  /** 思考模式的官方参考价；官方未单独返回时沿用非思考参考价。 */
+  official_thinking_pricing?: PlazaOfficialPricing | null
   /** 仅多档模型返回。 */
   long_context_basis?: PlazaLongContextBasis
   /** 仅配置了分时倍率的模型返回。 */

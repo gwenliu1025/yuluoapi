@@ -13,7 +13,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
-	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
 
@@ -63,14 +62,15 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
 	chatReq.Model = upstreamModel
 	chatReq.ReasoningEffort = openAICompatAnthropicReasoningEffort(&anthropicReq, upstreamModel, chatReq.ReasoningEffort)
+	if isQwenPlusUpstreamModel(upstreamModel) && anthropicReq.Thinking != nil {
+		enabled := anthropicReq.Thinking.Type == "enabled" || anthropicReq.Thinking.Type == "adaptive"
+		chatReq.EnableThinking = &enabled
+	}
 	chatReq.Stream = clientStream
 	if clientStream {
 		chatReq.StreamOptions = &apicompat.ChatStreamOptions{IncludeUsage: true}
 	}
 
-	convertedEffort := chatReq.ReasoningEffort
-	reasoningEffort := &convertedEffort
-	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, billingModel)
 	serviceTier := extractOpenAIServiceTierFromBody(body)
 
 	chatBody, err := json.Marshal(chatReq)
@@ -92,11 +92,14 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 		}
 		if changed {
 			chatBody = policyBody
-			if effectiveEffort := strings.TrimSpace(gjson.GetBytes(chatBody, "reasoning_effort").String()); effectiveEffort != "" {
-				reasoningEffort = &effectiveEffort
-			}
 		}
 	}
+	if !isQwenUpstreamModel(upstreamModel) {
+		chatBody = stripMessageOrSystemCacheControl(chatBody)
+	}
+	reasoningEffort := extractOpenAIReasoningEffortFromBody(chatBody, upstreamModel, billingModel, originalModel)
+	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, chatBody, upstreamModel)
+	explicitCache := hasEphemeralMessageOrSystemCacheControl(chatBody)
 	// Unlike forwardResponsesViaRawChatCompletions, applyOpenAIFastPolicyToBody
 	// is intentionally skipped: Anthropic Messages bodies carry no service_tier,
 	// so the converted Chat Completions body never contains one and the policy
@@ -133,10 +136,16 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	}
 
 	// 5. Convert response
+	var result *OpenAIForwardResult
 	if clientStream {
-		return s.streamChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
+		result, err = s.streamChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
+	} else {
+		result, err = s.bufferChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
 	}
-	return s.bufferChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
+	if result != nil {
+		result.ExplicitCache = explicitCache
+	}
+	return result, err
 }
 
 func (s *OpenAIGatewayService) bufferChatCompletionsAsAnthropic(

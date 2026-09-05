@@ -362,7 +362,8 @@ func chatUsageFromResponsesUsage(u *ResponsesUsage) *ChatUsage {
 		if usage.PromptTokensDetails == nil {
 			usage.PromptTokensDetails = &ChatTokenDetails{}
 		}
-		if usage.PromptTokensDetails.CacheWriteTokens == 0 && usage.PromptTokensDetails.CacheCreationTokens == 0 {
+		if usage.PromptTokensDetails.CacheCreationInputTokens == 0 &&
+			usage.PromptTokensDetails.CacheWriteTokens == 0 && usage.PromptTokensDetails.CacheCreationTokens == 0 {
 			usage.PromptTokensDetails.CacheCreationTokens = u.CacheCreationInputTokens
 		}
 	}
@@ -377,14 +378,16 @@ func promptDetailsFromResponses(src *ResponsesInputTokensDetails) *ChatTokenDeta
 	if src == nil {
 		return nil
 	}
-	if src.CachedTokens == 0 && src.AudioTokens == 0 && src.CacheCreationTokens == 0 && src.CacheWriteTokens == 0 {
+	if src.CachedTokens == 0 && src.AudioTokens == 0 && src.CacheCreationInputTokens == 0 &&
+		src.CacheCreationTokens == 0 && src.CacheWriteTokens == 0 {
 		return nil
 	}
 	return &ChatTokenDetails{
-		CachedTokens:        src.CachedTokens,
-		AudioTokens:         src.AudioTokens,
-		CacheCreationTokens: src.CacheCreationTokens,
-		CacheWriteTokens:    src.CacheWriteTokens,
+		CachedTokens:             src.CachedTokens,
+		AudioTokens:              src.AudioTokens,
+		CacheCreationInputTokens: src.CacheCreationInputTokens,
+		CacheCreationTokens:      src.CacheCreationTokens,
+		CacheWriteTokens:         src.CacheWriteTokens,
 	}
 }
 

@@ -56,6 +56,18 @@ function mountTable(
 }
 
 describe('PlazaModelPricingTable', () => {
+  it('没有后端标签时也保留精确上下文边界', () => {
+    const model = tokenModel()
+    model.pricing!.intervals = [
+      { min_tokens: 0, max_tokens: 31999, input_price: 6e-6, output_price: 24e-6 },
+      { min_tokens: 31999, max_tokens: null, input_price: 8e-6, output_price: 28e-6 }
+    ]
+    const text = mountTable([model], 1).text()
+    expect(text).toContain('≤31.999K')
+    expect(text).toContain('>31.999K')
+    expect(text).not.toContain('≤32K')
+  })
+
   it('倍率为 1 时展示渠道单价原值(¥/1M),价格保底 2 位小数', () => {
     const wrapper = mountTable([tokenModel()], 1)
     const text = wrapper.text()
@@ -212,6 +224,24 @@ describe('PlazaModelPricingTable', () => {
     expect(wrapper.text()).toContain('¥3.75')
     expect(wrapper.text()).toContain('¥7.00')
     expect(wrapper.text()).toContain('(1h')
+  })
+
+  it('显式缓存读取价存在时，在同一缓存列分别展示隐式/显式实付价和官方价', () => {
+    const model = tokenModel()
+    model.pricing!.cache_read_price = 1.5e-6
+    model.pricing!.explicit_cache_read_price = 1e-6
+    model.official_pricing!.cache_read_price = 1.5e-6
+    model.official_pricing!.explicit_cache_read_price = 1e-6
+
+    const cells = mountTable([model], 0.5).findAll('tbody td')
+    expect(cells[3].text()).toContain('modelPlaza.table.cacheReadImplicit')
+    expect(cells[3].text()).toContain('¥0.75')
+    expect(cells[3].text()).toContain('modelPlaza.table.cacheReadExplicit')
+    expect(cells[3].text()).toContain('¥0.50')
+    expect(cells[6].text()).toContain('modelPlaza.table.cacheReadImplicit')
+    expect(cells[6].text()).toContain('¥1.50')
+    expect(cells[6].text()).toContain('modelPlaza.table.cacheReadExplicit')
+    expect(cells[6].text()).toContain('¥1.00')
   })
 
   it('per_request 模型按单次价 × 倍率展示,官方价列显示 -', () => {
@@ -419,6 +449,63 @@ describe('PlazaModelPricingTable', () => {
     expect(wrapper.text()).toContain('Anthropic')
     expect(wrapper.text()).toContain('OpenAI')
   })
+
+  it('后端返回思考定价时拆成非思考/思考两行，并分别展示三档实付价和官方人民币参考价', () => {
+    const intervals = (start: number) =>
+      [0, 1, 2].map((offset) => ({
+        min_tokens: offset * 100000,
+        max_tokens: offset === 2 ? null : (offset + 1) * 100000,
+        tier_label: `T${offset + 1}`,
+        input_price: (start + offset) * 1e-6,
+        output_price: (start + offset + 10) * 1e-6,
+        cache_write_price: null,
+        cache_read_price: null,
+        per_request_price: null
+      }))
+    const model = tokenModel({
+      name: 'qwen-plus',
+      pricing: { ...tokenModel().pricing!, intervals: intervals(1) },
+      thinking_pricing: { ...tokenModel().pricing!, intervals: intervals(4) },
+      official_pricing: {
+        ...tokenModel().official_pricing!,
+        intervals: intervals(7)
+      },
+      official_thinking_pricing: {
+        ...tokenModel().official_pricing!,
+        intervals: intervals(10)
+      }
+    })
+
+    const trs = mountTable([model], 0.5).findAll('tbody tr')
+    expect(trs).toHaveLength(2)
+    expect(trs[0].findAll('td')[0].text()).toContain('modelPlaza.table.nonThinking')
+    expect(trs[1].findAll('td')[0].text()).toContain('modelPlaza.table.thinking')
+
+    const nonThinkingCells = trs[0].findAll('td')
+    expect(nonThinkingCells[1].findAll('.leading-5').map((row) => row.text())).toEqual([
+      'T1 ¥0.50',
+      'T2 ¥1.00',
+      'T3 ¥1.50'
+    ])
+    expect(nonThinkingCells[4].text()).toContain('¥7.00')
+    expect(nonThinkingCells[4].text()).toContain('¥9.00')
+
+    const thinkingCells = trs[1].findAll('td')
+    expect(thinkingCells[1].findAll('.leading-5').map((row) => row.text())).toEqual([
+      'T1 ¥2.00',
+      'T2 ¥2.50',
+      'T3 ¥3.00'
+    ])
+    expect(thinkingCells[4].text()).toContain('¥10.00')
+    expect(thinkingCells[4].text()).toContain('¥12.00')
+  })
+
+  it('未返回思考定价时维持单行旧展示且不增加模式标签', () => {
+    const wrapper = mountTable([tokenModel({ name: 'legacy-model' })], 1)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('modelPlaza.table.nonThinking')
+    expect(wrapper.text()).not.toContain('modelPlaza.table.thinking')
+  })
 })
 
 describe('PlazaModelPricingTable 长上下文阶梯', () => {
@@ -510,6 +597,31 @@ describe('PlazaModelPricingTable 长上下文阶梯', () => {
     expect(cells[6].text()).not.toContain('(1h')
   })
 
+  it('阶梯缓存价逐档展示隐式与显式读取金额', () => {
+    const priced = ladderIntervals().map((interval, index) => ({
+      ...interval,
+      cache_read_price: (index + 2) * 1e-6,
+      explicit_cache_read_price: (index + 1) * 1e-6
+    }))
+    const reference = ladderIntervals().map((interval, index) => ({
+      ...interval,
+      cache_read_price: (index + 4) * 1e-6,
+      explicit_cache_read_price: (index + 3) * 1e-6
+    }))
+    const model = ladderModel({
+      pricing: { ...ladderModel().pricing!, intervals: priced },
+      official_pricing: { ...ladderModel().official_pricing!, intervals: reference }
+    })
+
+    const cells = mountTable([model], 0.5).findAll('tbody td')
+    expect(cells[3].text()).toContain('modelPlaza.table.cacheReadImplicitShort ¥1.00')
+    expect(cells[3].text()).toContain('modelPlaza.table.cacheReadExplicitShort ¥0.50')
+    expect(cells[3].text()).toContain('modelPlaza.table.cacheReadImplicitShort ¥1.50')
+    expect(cells[3].text()).toContain('modelPlaza.table.cacheReadExplicitShort ¥1.00')
+    expect(cells[6].text()).toContain('modelPlaza.table.cacheReadImplicitShort ¥4.00')
+    expect(cells[6].text()).toContain('modelPlaza.table.cacheReadExplicitShort ¥3.00')
+  })
+
   it('整单计价的档位标签带 tooltip;边际计价在模型名旁加徽章并换用边际说明', () => {
     const whole = mountTable([ladderModel()], 1)
     const wholeLabels = whole.findAll('tbody td span[title="modelPlaza.table.tierHint"]')
@@ -571,7 +683,8 @@ describe('PlazaModelPricingTable 分时计价', () => {
 
     // 标准行:输入 3 × 0.8
     const baseCells = trs[0].findAll('td')
-    expect(baseCells[0].text()).toBe('deepseek-chat')
+    expect(baseCells[0].text()).toContain('deepseek-chat')
+    expect(baseCells[0].text()).toContain('modelPlaza.table.timePricingStandard')
     expect(baseCells[1].text()).toContain('¥2.40')
     expect(baseCells[7].text()).toContain('0.8x')
 
@@ -595,6 +708,50 @@ describe('PlazaModelPricingTable 分时计价', () => {
 
     // 官方列不受时段影响
     expect(nightCells[4].text()).toContain('¥3.00')
+  })
+
+  it('标准行标注其他时段；实际价与官方价分别乘各自完全匹配的分时倍率', () => {
+    const model = timePricedModel()
+    model.time_pricing!.weekdays_only = true
+    model.official_pricing!.time_pricing = {
+      timezone: 'Asia/Shanghai',
+      weekdays_only: true,
+      periods: [
+        // HH:mm:ss 与 HH:mm 视为同一整分钟时刻。
+        { start_time: '00:30:00', end_time: '08:30', multiplier: 0.25 },
+        { start_time: '18:00', end_time: '22:00:00', multiplier: 1.5 }
+      ]
+    }
+
+    const trs = mountTable([model], 1).findAll('tbody tr')
+    const baseCells = trs[0].findAll('td')
+    expect(baseCells[0].text()).toContain('modelPlaza.table.timePricingStandard')
+    expect(baseCells[0].find('[title="modelPlaza.table.timePricingStandardHint"]').exists()).toBe(true)
+    expect(baseCells[1].text()).toContain('¥3.00')
+    expect(baseCells[4].text()).toContain('¥3.00')
+
+    const nightCells = trs[1].findAll('td')
+    expect(nightCells[1].text()).toContain('¥1.50')
+    expect(nightCells[4].text()).toContain('¥0.75')
+
+    const peakCells = trs[2].findAll('td')
+    expect(peakCells[1].text()).toContain('¥3.60')
+    expect(peakCells[4].text()).toContain('¥4.50')
+  })
+
+  it('官方分时时区、工作日规则或时段不匹配时不盲乘官方倍率', () => {
+    const model = timePricedModel()
+    model.official_pricing!.time_pricing = {
+      timezone: 'UTC',
+      weekdays_only: true,
+      periods: [{ start_time: '00:30', end_time: '08:30', multiplier: 9 }]
+    }
+
+    const nightCells = mountTable([model], 1).findAll('tbody tr')[1].findAll('td')
+    // 实际夜间倍率仍生效，官方参考价因三项契约未同时匹配而保持标准价。
+    expect(nightCells[1].text()).toContain('¥1.50')
+    expect(nightCells[4].text()).toContain('¥3.00')
+    expect(nightCells[4].text()).not.toContain('¥27.00')
   })
 
   it('仅工作日生效时时段行带工作日前缀,tooltip 换用周末回落文案', () => {

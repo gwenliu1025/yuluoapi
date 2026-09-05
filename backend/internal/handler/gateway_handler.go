@@ -546,14 +546,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if result.ReasoningEffort == nil {
 				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
 			}
-			// 国产模型 thinking-enabled 默认 effort 填充：Kimi/GLM/MiniMax 这些不支持 effort 档位的
-			// passback-required 上游，仅要 thinking 启用且 OutputEffort 未明确传递时，在 usage_log 写 "high"
-			// 避免该字段长期为 NULL（详见 DefaultEffortForThinkingEnabled 文档）。
+			protocolModel := result.UpstreamModel
+			if protocolModel == "" {
+				protocolModel = result.Model
+			}
+			result.ReasoningEffort = service.ApplyThinkingEnabledFallback(result.ReasoningEffort, body, protocolModel)
+			// 保留其它国产模型基于已解析请求的既有兜底；千问显式关闭会由上面的
+			// 最终 wire body 解析成 "none"，不会被该兜底覆盖。
 			if result.ReasoningEffort == nil && parsedReq.ThinkingEnabled {
-				protocolModel := result.UpstreamModel
-				if protocolModel == "" {
-					protocolModel = result.Model
-				}
 				result.ReasoningEffort = service.DefaultEffortForThinkingEnabled(protocolModel)
 			}
 
@@ -888,12 +888,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				if result.ReasoningEffort == nil {
 					result.ReasoningEffort = service.NormalizeClaudeOutputEffort(attemptParsedReq.OutputEffort)
 				}
-				// 同上（重试路径中的对称填充）。详见非重试路径同名注释。
+				protocolModel := result.UpstreamModel
+				if protocolModel == "" {
+					protocolModel = result.Model
+				}
+				result.ReasoningEffort = service.ApplyThinkingEnabledFallback(result.ReasoningEffort, attemptParsedReq.Body.Bytes(), protocolModel)
+				// 同上，部分结果也按最终成功尝试的 wire body 记录模式。
 				if result.ReasoningEffort == nil && attemptParsedReq.ThinkingEnabled {
-					protocolModel := result.UpstreamModel
-					if protocolModel == "" {
-						protocolModel = result.Model
-					}
 					result.ReasoningEffort = service.DefaultEffortForThinkingEnabled(protocolModel)
 				}
 

@@ -127,9 +127,21 @@ func anthropicToChatMessages(system json.RawMessage, msgs []AnthropicMessage) ([
 			return nil, err
 		}
 		if len(sysParts) > 0 {
+			hasCacheControl := false
+			chatParts := make([]ChatContentPart, 0, len(sysParts))
+			for _, part := range sysParts {
+				if part.Text == "" {
+					continue
+				}
+				hasCacheControl = hasCacheControl || part.CacheControl != nil
+				chatParts = append(chatParts, ChatContentPart{Type: "text", Text: part.Text, CacheControl: part.CacheControl})
+			}
 			text := joinResponsesContentPartText(sysParts)
 			if text != "" {
 				content, _ := json.Marshal(text)
+				if hasCacheControl {
+					content, _ = json.Marshal(chatParts)
+				}
 				messages = append(messages, ChatMessage{Role: "system", Content: content})
 			}
 		}
@@ -208,12 +220,14 @@ func anthropicUserToChatMessages(raw json.RawMessage) ([]ChatMessage, error) {
 	var textParts []string
 	var parts []ChatContentPart
 	hasImage := false
+	hasCacheControl := false
 	for _, b := range blocks {
 		switch b.Type {
 		case "text":
 			if b.Text != "" {
 				textParts = append(textParts, b.Text)
-				parts = append(parts, ChatContentPart{Type: "text", Text: b.Text})
+				hasCacheControl = hasCacheControl || b.CacheControl != nil
+				parts = append(parts, ChatContentPart{Type: "text", Text: b.Text, CacheControl: b.CacheControl})
 			}
 		case "image":
 			if uri := anthropicImageToDataURI(b.Source); uri != "" {
@@ -230,7 +244,7 @@ func anthropicUserToChatMessages(raw json.RawMessage) ([]ChatMessage, error) {
 		parts = append(parts, toolResultImageParts...)
 	}
 
-	if !hasImage {
+	if !hasImage && !hasCacheControl {
 		if len(textParts) > 0 {
 			content, _ := json.Marshal(strings.Join(textParts, "\n\n"))
 			out = append(out, ChatMessage{Role: "user", Content: content})
@@ -266,7 +280,17 @@ func anthropicAssistantToChatMessages(raw json.RawMessage) ([]ChatMessage, error
 
 	msg := ChatMessage{Role: "assistant"}
 	text := extractAnthropicTextFromBlocks(blocks)
-	if text != "" {
+	hasCacheControl := false
+	var textParts []ChatContentPart
+	for _, b := range blocks {
+		if b.Type == "text" && b.Text != "" {
+			hasCacheControl = hasCacheControl || b.CacheControl != nil
+			textParts = append(textParts, ChatContentPart{Type: "text", Text: b.Text, CacheControl: b.CacheControl})
+		}
+	}
+	if hasCacheControl {
+		msg.Content, _ = json.Marshal(textParts)
+	} else if text != "" {
 		content, _ := json.Marshal(text)
 		msg.Content = content
 	}
@@ -523,10 +547,10 @@ func chatUsageToAnthropicUsage(usage *ChatUsage) AnthropicUsage {
 	cacheCreationTokens := 0
 	if usage.PromptTokensDetails != nil {
 		cachedTokens = usage.PromptTokensDetails.CachedTokens
-		// cache_write_tokens and cache_creation_tokens are alternate spellings of
-		// the same quantity, not additive; the double-conversion path
-		// (ChatUsageToResponsesUsage) prefers write and falls back to creation.
-		if usage.PromptTokensDetails.CacheWriteTokens > 0 {
+		// 三个字段是同一缓存写入量的不同协议拼写，按优先级取一个，禁止累加。
+		if usage.PromptTokensDetails.CacheCreationInputTokens > 0 {
+			cacheCreationTokens = usage.PromptTokensDetails.CacheCreationInputTokens
+		} else if usage.PromptTokensDetails.CacheWriteTokens > 0 {
 			cacheCreationTokens = usage.PromptTokensDetails.CacheWriteTokens
 		} else {
 			cacheCreationTokens = usage.PromptTokensDetails.CacheCreationTokens

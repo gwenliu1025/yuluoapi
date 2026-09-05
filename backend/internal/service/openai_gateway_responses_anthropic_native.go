@@ -62,6 +62,9 @@ func (s *OpenAIGatewayService) forwardResponsesViaNativeAnthropic(
 		return nil, fmt.Errorf("missing model in request")
 	}
 	clientStream := responsesReq.Stream
+	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
+	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
+	responsesReq.Model = upstreamModel
 
 	// 3. Convert Responses → Anthropic
 	anthropicReq, err := apicompat.ResponsesToAnthropicRequest(&responsesReq)
@@ -70,15 +73,7 @@ func (s *OpenAIGatewayService) forwardResponsesViaNativeAnthropic(
 		return nil, fmt.Errorf("convert responses to anthropic: %w", err)
 	}
 
-	// 4. Model mapping（OpenAI 网关统一入口的映射语义）
-	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
-	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
-	anthropicReq.Model = upstreamModel
-
-	reasoningEffort := ExtractResponsesReasoningEffortFromBody(body, upstreamModel, billingModel, originalModel)
-	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, billingModel)
-
-	// 5. Force upstream streaming（客户端原始终决定响应格式；
+	// 4. Force upstream streaming（客户端原始终决定响应格式；
 	// 上游恒为流式，非流式由缓冲路径组装）。
 	anthropicReq.Stream = true
 	reqStream := true
@@ -116,7 +111,7 @@ func (s *OpenAIGatewayService) forwardResponsesViaNativeAnthropic(
 	}
 
 	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
-	upstreamReq, _, err := s.buildNativeAnthropicUpstreamRequest(upstreamCtx, c, account, anthropicBody, apiKey, targetURL)
+	upstreamReq, wireBody, err := s.buildNativeAnthropicUpstreamRequest(upstreamCtx, c, account, anthropicBody, apiKey, targetURL)
 	releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
@@ -136,11 +131,20 @@ func (s *OpenAIGatewayService) forwardResponsesViaNativeAnthropic(
 		writeResponsesError(c, mapUpstreamStatusCode(resp.StatusCode), "server_error", upstreamMsg)
 		return nil, fmt.Errorf("upstream error: %d %s", resp.StatusCode, upstreamMsg)
 	}
+	reasoningEffort := extractOpenAIReasoningEffortFromBody(wireBody, upstreamModel, billingModel, originalModel)
+	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, wireBody, upstreamModel)
+	explicitCache := hasEphemeralMessageOrSystemCacheControl(wireBody)
 
+	var result *OpenAIForwardResult
 	if clientStream {
-		return s.handleResponsesStreamingFromNativeAnthropic(resp, c, originalModel, billingModel, upstreamModel, reasoningEffort, startTime, clientToolMapping)
+		result, err = s.handleResponsesStreamingFromNativeAnthropic(resp, c, originalModel, billingModel, upstreamModel, reasoningEffort, startTime, clientToolMapping)
+	} else {
+		result, err = s.handleResponsesBufferedFromNativeAnthropic(resp, c, originalModel, billingModel, upstreamModel, reasoningEffort, startTime, clientToolMapping)
 	}
-	return s.handleResponsesBufferedFromNativeAnthropic(resp, c, originalModel, billingModel, upstreamModel, reasoningEffort, startTime, clientToolMapping)
+	if result != nil {
+		result.ExplicitCache = explicitCache
+	}
+	return result, err
 }
 
 // handleResponsesBufferedFromNativeAnthropic reads Anthropic SSE events, assembles
@@ -166,6 +170,21 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 
 	var finalResp *apicompat.AnthropicResponse
 	var usage ClaudeUsage
+	sawTerminalEvent := false
+	var streamErr error
+	resultWithUsage := func() *OpenAIForwardResult {
+		return &OpenAIForwardResult{
+			RequestID:        requestID,
+			Usage:            claudeUsageToOpenAIUsage(&usage),
+			Model:            originalModel,
+			BillingModel:     billingModel,
+			UpstreamModel:    upstreamModel,
+			UpstreamEndpoint: "/v1/messages",
+			ReasoningEffort:  reasoningEffort,
+			Stream:           false,
+			Duration:         time.Since(startTime),
+		}
+	}
 
 	// 读间隔上限：上游挂住 SSE 时中止组装（缓冲路径尚未提交响应头，可回 502）。
 	streamInterval := s.anthropicNativeStreamInterval()
@@ -197,10 +216,14 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 				return onIdle()
 			}
 			logReadErr(rerr)
+			if !errors.Is(rerr, io.EOF) {
+				streamErr = fmt.Errorf("stream read error: %w", rerr)
+			}
 			break
 		}
 		// SSE 规范允许 `event:xxx`（冒号后无空格）：Kimi 等上游返回紧凑格式。
-		if _, ok := extractOpenAISSEEventLine(line); !ok {
+		eventName, ok := extractOpenAISSEEventLine(line)
+		if !ok {
 			continue
 		}
 
@@ -210,11 +233,21 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 				return onIdle()
 			}
 			logReadErr(rerr)
+			if !errors.Is(rerr, io.EOF) {
+				streamErr = fmt.Errorf("stream read error: %w", rerr)
+			}
 			break
 		}
 		payload, ok := extractOpenAISSEDataLine(dataLine)
 		if !ok {
 			continue
+		}
+		if eventName == "error" || gjson.Get(payload, "type").String() == "error" {
+			streamErr = &sseStreamErrorEventError{RawData: payload}
+			break
+		}
+		if anthropicStreamEventIsTerminal(eventName, payload) {
+			sawTerminalEvent = true
 		}
 
 		var event apicompat.AnthropicStreamEvent
@@ -239,7 +272,7 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 		}
 		if event.Type == "content_block_delta" && event.Delta != nil && finalResp != nil && event.Index != nil {
 			idx := *event.Index
-			if idx < len(finalResp.Content) {
+			if idx >= 0 && idx < len(finalResp.Content) {
 				switch event.Delta.Type {
 				case "text_delta":
 					finalResp.Content[idx].Text += event.Delta.Text
@@ -250,6 +283,16 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 				}
 			}
 		}
+	}
+	if !sawTerminalEvent {
+		if streamErr == nil {
+			streamErr = fmt.Errorf("stream usage incomplete: missing terminal event")
+		}
+		writeResponsesError(c, http.StatusBadGateway, "server_error", "Upstream stream ended before completion")
+		if finalResp != nil || usage.InputTokens > 0 || usage.OutputTokens > 0 {
+			return resultWithUsage(), streamErr
+		}
+		return nil, streamErr
 	}
 
 	if finalResp == nil {
@@ -285,17 +328,7 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 		c.JSON(http.StatusOK, responsesResp)
 	}
 
-	return &OpenAIForwardResult{
-		RequestID:        requestID,
-		Usage:            claudeUsageToOpenAIUsage(&usage),
-		Model:            originalModel,
-		BillingModel:     billingModel,
-		UpstreamModel:    upstreamModel,
-		UpstreamEndpoint: "/v1/messages",
-		ReasoningEffort:  reasoningEffort,
-		Stream:           false,
-		Duration:         time.Since(startTime),
-	}, nil
+	return resultWithUsage(), nil
 }
 
 // handleResponsesStreamingFromNativeAnthropic reads Anthropic SSE events, converts
@@ -329,6 +362,8 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 	var firstTokenMs *int
 	firstChunk := true
 	clientDisconnected := false
+	sawTerminalEvent := false
+	var streamErr error
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -429,9 +464,13 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 				return onIdle()
 			}
 			logReadErr(rerr)
+			if !errors.Is(rerr, io.EOF) {
+				streamErr = fmt.Errorf("stream read error: %w", rerr)
+			}
 			break
 		}
-		if _, ok := extractOpenAISSEEventLine(line); !ok {
+		eventName, ok := extractOpenAISSEEventLine(line)
+		if !ok {
 			continue
 		}
 
@@ -441,11 +480,21 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 				return onIdle()
 			}
 			logReadErr(rerr)
+			if !errors.Is(rerr, io.EOF) {
+				streamErr = fmt.Errorf("stream read error: %w", rerr)
+			}
 			break
 		}
 		payload, ok := extractOpenAISSEDataLine(dataLine)
 		if !ok {
 			continue
+		}
+		if eventName == "error" || gjson.Get(payload, "type").String() == "error" {
+			streamErr = &sseStreamErrorEventError{RawData: payload}
+			break
+		}
+		if anthropicStreamEventIsTerminal(eventName, payload) {
+			sawTerminalEvent = true
 		}
 
 		var event apicompat.AnthropicStreamEvent
@@ -454,6 +503,12 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 		}
 
 		processAnthropicEvent(&event)
+	}
+	if !sawTerminalEvent {
+		if streamErr == nil {
+			streamErr = fmt.Errorf("stream usage incomplete: missing terminal event")
+		}
+		return resultWithUsage(), streamErr
 	}
 
 	// Finalize state machine（客户端已断开时仍推进，保证 usage 汇总完整；仅在

@@ -27,7 +27,6 @@ func AnthropicToResponses(req *AnthropicRequest) (*ResponsesRequest, error) {
 		Stream:  req.Stream,
 		Include: []string{"reasoning.encrypted_content"},
 	}
-
 	// Reasoning models (gpt-5.x) served via the Responses API do not accept
 	// sampling parameters. Sending temperature or top_p causes a 400
 	// "Unsupported parameter" error, so we only forward them for non-reasoning
@@ -164,7 +163,7 @@ func parseAnthropicSystemContentParts(raw json.RawMessage) ([]ResponsesContentPa
 	var parts []ResponsesContentPart
 	for _, b := range blocks {
 		if b.Type == "text" && b.Text != "" && !isAnthropicBillingHeaderText(b.Text) {
-			parts = append(parts, ResponsesContentPart{Type: "input_text", Text: b.Text})
+			parts = append(parts, ResponsesContentPart{Type: "input_text", Text: b.Text, CacheControl: b.CacheControl})
 		}
 	}
 	return parts, nil
@@ -233,11 +232,11 @@ func anthropicUserToResponses(raw json.RawMessage) ([]ResponsesInputItem, error)
 		switch b.Type {
 		case "text":
 			if b.Text != "" {
-				parts = append(parts, ResponsesContentPart{Type: "input_text", Text: b.Text})
+				parts = append(parts, ResponsesContentPart{Type: "input_text", Text: b.Text, CacheControl: b.CacheControl})
 			}
 		case "image":
 			if uri := anthropicImageToDataURI(b.Source); uri != "" {
-				parts = append(parts, ResponsesContentPart{Type: "input_image", ImageURL: uri})
+				parts = append(parts, ResponsesContentPart{Type: "input_image", ImageURL: uri, CacheControl: b.CacheControl})
 			}
 		}
 	}
@@ -302,6 +301,17 @@ func anthropicAssistantToResponses(raw json.RawMessage) ([]ResponsesInputItem, e
 	text := extractAnthropicTextFromBlocks(blocks)
 	if text != "" {
 		parts := []ResponsesContentPart{{Type: "output_text", Text: text}}
+		var preserved []ResponsesContentPart
+		hasCacheControl := false
+		for _, block := range blocks {
+			if block.Type == "text" && block.Text != "" {
+				preserved = append(preserved, ResponsesContentPart{Type: "output_text", Text: block.Text, CacheControl: block.CacheControl})
+				hasCacheControl = hasCacheControl || block.CacheControl != nil
+			}
+		}
+		if hasCacheControl {
+			parts = preserved
+		}
 		partsJSON, err := json.Marshal(parts)
 		if err != nil {
 			return nil, err

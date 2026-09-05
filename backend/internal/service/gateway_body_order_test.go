@@ -165,6 +165,12 @@ func TestEnforceCacheControlLimit_CountsToolsAndPreservesMessageAnchorsFirst(t *
 	require.False(t, gjson.GetBytes(result, "tools.0.cache_control").Exists())
 }
 
+func TestHasEphemeralMessageOrSystemCacheControl(t *testing.T) {
+	require.True(t, hasEphemeralMessageOrSystemCacheControl([]byte(`{"system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral"}}]}`)))
+	require.True(t, hasEphemeralMessageOrSystemCacheControl([]byte(`{"messages":[{"role":"user","content":[{"type":"text","text":"hi","cache_control":{"type":"ephemeral"}}]}]}`)))
+	require.False(t, hasEphemeralMessageOrSystemCacheControl([]byte(`{"messages":[{"role":"user","content":[{"type":"text","text":"hi","cache_control":{"type":"persistent"}}]}],"tools":[{"cache_control":{"type":"ephemeral"}}]}`)))
+}
+
 func TestInjectAnthropicCacheControlTTL1h_OnlyUpdatesExistingEphemeralCacheControl(t *testing.T) {
 	body := []byte(`{"alpha":1,"cache_control":{"type":"ephemeral"},"system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral","ttl":"5m"}},{"type":"text","text":"plain"}],"messages":[{"role":"user","content":[{"type":"text","text":"hi","cache_control":{"type":"ephemeral"}},{"type":"text","text":"non","cache_control":{"type":"persistent","ttl":"5m"}}]}],"tools":[{"name":"a","input_schema":{},"cache_control":{"type":"ephemeral"}}],"omega":2}`)
 

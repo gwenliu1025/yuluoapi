@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 // 国产供应商原生 Anthropic 直通路径（api_protocol=anthropic）的 reasoning_effort 记录。
@@ -78,6 +79,7 @@ func TestNativeAnthropicPassthroughRecordsOutputConfigEffort(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	body := []byte(`{"model":"k3","max_tokens":32,"stream":false,` +
 		`"output_config":{"effort":"low"},` +
+		`"system":[{"type":"text","text":"stable","cache_control":{"type":"ephemeral"}}],` +
 		`"messages":[{"role":"user","content":"hi"}]}`)
 	upstream := &httpUpstreamRecorder{resp: nativeAnthropicBufferedResponse()}
 	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
@@ -88,6 +90,9 @@ func TestNativeAnthropicPassthroughRecordsOutputConfigEffort(t *testing.T) {
 	require.NotNil(t, result)
 	require.NotNil(t, result.ReasoningEffort)
 	require.Equal(t, "low", *result.ReasoningEffort)
+	require.True(t, result.ExplicitCache)
+	require.Zero(t, result.Usage.CacheCreationInputTokens)
+	require.Equal(t, "ephemeral", gjson.GetBytes(upstream.lastBody, "system.0.cache_control.type").String())
 }
 
 func TestNativeAnthropicPassthroughThinkingEnabledFallback(t *testing.T) {
@@ -111,7 +116,7 @@ func TestNativeAnthropicPassthroughStreamRecordsEffort(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	body := []byte(`{"model":"k3","max_tokens":32,"stream":true,` +
 		`"output_config":{"effort":"max"},` +
-		`"messages":[{"role":"user","content":"hi"}]}`)
+		`"messages":[{"role":"user","content":[{"type":"text","text":"hi","cache_control":{"type":"ephemeral"}}]}]}`)
 	upstream := &httpUpstreamRecorder{resp: nativeAnthropicStreamResponse()}
 	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
 
@@ -121,6 +126,33 @@ func TestNativeAnthropicPassthroughStreamRecordsEffort(t *testing.T) {
 	require.NotNil(t, result)
 	require.NotNil(t, result.ReasoningEffort)
 	require.Equal(t, "max", *result.ReasoningEffort)
+	require.True(t, result.ExplicitCache)
+	require.Zero(t, result.Usage.CacheCreationInputTokens)
+	require.Equal(t, "ephemeral", gjson.GetBytes(upstream.lastBody, "messages.0.content.0.cache_control.type").String())
+}
+
+func TestNativeAnthropicPassthroughPartialUsageKeepsExplicitCache(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"model":"k3","max_tokens":32,"stream":true,` +
+		`"messages":[{"role":"user","content":[{"type":"text","text":"hi","cache_control":{"type":"ephemeral"}}]}]}`)
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(
+			"event: message_start\n" +
+				`data: {"type":"message_start","message":{"id":"msg_1","type":"message","usage":{"input_tokens":4,"cache_creation_input_tokens":0,"cache_read_input_tokens":1605}}}` + "\n\n",
+		)),
+	}}
+	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
+
+	result, err := svc.ForwardAsAnthropic(context.Background(),
+		adaptiveProtocolTestContext("/v1/messages", body), nativeAnthropicTestAccount(), body, "", "")
+	require.ErrorContains(t, err, "missing terminal event")
+	require.NotNil(t, result)
+	require.True(t, result.ExplicitCache)
+	require.Zero(t, result.Usage.CacheCreationInputTokens)
+	require.Equal(t, 1605, result.Usage.CacheReadInputTokens)
+	require.Equal(t, "ephemeral", gjson.GetBytes(upstream.lastBody, "messages.0.content.0.cache_control.type").String())
 }
 
 func TestNativeAnthropicPassthroughNoEffortStaysNil(t *testing.T) {

@@ -1482,6 +1482,20 @@ func TestApplyThinkingEnabledFallback(t *testing.T) {
 			model:       "deepseek-v4-pro",
 			wantPassThr: true,
 		},
+		{
+			name:   "qwen-plus Anthropic thinking enabled overrides missing effort",
+			effort: nil,
+			body:   `{"thinking":{"type":"enabled"}}`,
+			model:  "qwen-plus",
+			want:   strPtr("high"),
+		},
+		{
+			name:   "qwen-plus Anthropic thinking disabled overrides existing effort",
+			effort: strPtr("high"),
+			body:   `{"thinking":{"type":"disabled"}}`,
+			model:  "qwen-plus",
+			want:   strPtr("none"),
+		},
 
 		// effort=nil + thinking enabled + passback-required 模型 → 填 high
 		{

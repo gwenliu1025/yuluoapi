@@ -141,6 +141,10 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	}
 
 	responsesReq.Model = upstreamModel
+	if isQwenPlusUpstreamModel(upstreamModel) && anthropicReq.Thinking != nil {
+		enabled := anthropicReq.Thinking.Type == "enabled" || anthropicReq.Thinking.Type == "adaptive"
+		responsesReq.EnableThinking = &enabled
+	}
 	if responsesReq.Reasoning != nil {
 		responsesReq.Reasoning.Effort = openAICompatAnthropicReasoningEffort(&anthropicReq, upstreamModel, responsesReq.Reasoning.Effort)
 	}
@@ -317,6 +321,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		if patchErr != nil {
 			return nil, fmt.Errorf("apply grok Free function-tool cache route: %w", patchErr)
 		}
+	}
+	if !isQwenUpstreamModel(upstreamModel) {
+		responsesBody = stripResponsesInputCacheControl(responsesBody)
 	}
 
 	// 5. Get access token
@@ -502,23 +509,27 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		return nil, handleErr
 	}
 
-	// Propagate ServiceTier and ReasoningEffort to result for billing
-	if handleErr == nil && result != nil {
-		if compatContinuationEnabled && promptCacheKey != "" && result.ResponseID != "" {
-			s.bindOpenAICompatSessionResponseID(ctx, c, account, promptCacheKey, result.ResponseID)
+	// 最终 Responses wire body 是转换后模式与显式缓存的唯一计费依据。
+	if result != nil {
+		if handleErr == nil {
+			if compatContinuationEnabled && promptCacheKey != "" && result.ResponseID != "" {
+				s.bindOpenAICompatSessionResponseID(ctx, c, account, promptCacheKey, result.ResponseID)
+			}
+			if promptCacheKey != "" && anthropicDigestChain != "" {
+				s.bindOpenAICompatAnthropicDigestPromptCacheKey(account, apiKeyID, anthropicDigestChain, promptCacheKey, anthropicMatchedDigestChain)
+			}
+			// 计费 tier 优先采用上游回显值；上游未回显时回退到最终出站 body（经过
+			// fast policy filter/force 之后）里的 tier。
+			if tier := resolvedOpenAIUpstreamServiceTier(c, extractOpenAIServiceTierFromBody(responsesBody)); tier != nil {
+				result.ServiceTier = tier
+			}
 		}
-		if promptCacheKey != "" && anthropicDigestChain != "" {
-			s.bindOpenAICompatAnthropicDigestPromptCacheKey(account, apiKeyID, anthropicDigestChain, promptCacheKey, anthropicMatchedDigestChain)
-		}
-		// 计费 tier 优先采用上游回显值；上游未回显时回退到最终出站 body（经过
-		// fast policy filter/force 之后）里的 tier。
-		if tier := resolvedOpenAIUpstreamServiceTier(c, extractOpenAIServiceTierFromBody(responsesBody)); tier != nil {
-			result.ServiceTier = tier
-		}
-		if responsesReq.Reasoning != nil && responsesReq.Reasoning.Effort != "" {
-			re := responsesReq.Reasoning.Effort
-			result.ReasoningEffort = &re
-		}
+		result.ReasoningEffort = ApplyThinkingEnabledFallback(
+			extractOpenAIReasoningEffortFromBody(responsesBody, upstreamModel, billingModel, originalModel),
+			responsesBody,
+			upstreamModel,
+		)
+		result.ExplicitCache = hasEphemeralResponsesInputCacheControl(responsesBody)
 	}
 
 	// Extract and save Codex usage snapshot from response headers (for OAuth accounts).

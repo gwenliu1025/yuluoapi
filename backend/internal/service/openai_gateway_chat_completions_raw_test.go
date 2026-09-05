@@ -83,7 +83,7 @@ func TestBuildOpenAIResponsesURL_ProbeURL(t *testing.T) {
 func TestForwardAsRawChatCompletions_ForcesStreamUsageUpstreamAndPassesUsageDownstream(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":true}`)
+	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral"}}]}],"stream":true}`)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
@@ -115,10 +115,12 @@ func TestForwardAsRawChatCompletions_ForcesStreamUsageUpstreamAndPassesUsageDown
 	require.Equal(t, 9, result.Usage.InputTokens)
 	require.Equal(t, 4, result.Usage.OutputTokens)
 	require.Equal(t, 3, result.Usage.CacheReadInputTokens)
+	require.True(t, result.ExplicitCache)
 	require.NotNil(t, upstream.lastReq)
 	require.NoError(t, upstream.lastReq.Context().Err())
 	require.Equal(t, HTTPUpstreamProfileOpenAI, HTTPUpstreamProfileFromContext(upstream.lastReq.Context()))
 	require.True(t, gjson.GetBytes(upstream.lastBody, "stream_options.include_usage").Bool())
+	require.Equal(t, "ephemeral", gjson.GetBytes(upstream.lastBody, "messages.0.content.0.cache_control.type").String())
 	require.Contains(t, rec.Body.String(), `"usage"`)
 	require.Contains(t, rec.Body.String(), "data: [DONE]")
 }
@@ -281,9 +283,11 @@ func TestForwardAsRawChatCompletions_NonStreamingCapturesCacheWriteUsage(t *test
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name      string
-		usageJSON string
-		wantWrite int
+		name         string
+		requestJSON  string
+		usageJSON    string
+		wantWrite    int
+		wantExplicit bool
 	}{
 		{
 			name:      "positive cache write",
@@ -291,15 +295,30 @@ func TestForwardAsRawChatCompletions_NonStreamingCapturesCacheWriteUsage(t *test
 			wantWrite: 6,
 		},
 		{
+			name:      "Aliyun cache creation",
+			usageJSON: `{"prompt_tokens":12,"completion_tokens":3,"total_tokens":15,"prompt_tokens_details":{"cached_tokens":4,"cache_creation_input_tokens":6}}`,
+			wantWrite: 6,
+		},
+		{
 			name:      "nested zero overrides legacy alias",
 			usageJSON: `{"prompt_tokens":12,"completion_tokens":3,"total_tokens":15,"cache_creation_input_tokens":19,"prompt_tokens_details":{"cached_tokens":4,"cache_write_tokens":0}}`,
 			wantWrite: 0,
+		},
+		{
+			name:         "Aliyun zero overrides legacy alias",
+			requestJSON:  `{"model":"gpt-5.6","messages":[{"role":"user","content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral"}}]}],"stream":false}`,
+			usageJSON:    `{"prompt_tokens":12,"completion_tokens":3,"total_tokens":15,"cache_creation_tokens":19,"prompt_tokens_details":{"cached_tokens":4,"cache_creation_input_tokens":0}}`,
+			wantWrite:    0,
+			wantExplicit: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body := []byte(`{"model":"gpt-5.6","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+			if tt.requestJSON == "" {
+				tt.requestJSON = `{"model":"gpt-5.6","messages":[{"role":"user","content":"hello"}],"stream":false}`
+			}
+			body := []byte(tt.requestJSON)
 			rec := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(rec)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
@@ -324,6 +343,10 @@ func TestForwardAsRawChatCompletions_NonStreamingCapturesCacheWriteUsage(t *test
 			require.Equal(t, 12, result.Usage.InputTokens)
 			require.Equal(t, 4, result.Usage.CacheReadInputTokens)
 			require.Equal(t, tt.wantWrite, result.Usage.CacheCreationInputTokens)
+			require.Equal(t, tt.wantExplicit, result.ExplicitCache)
+			if tt.wantExplicit {
+				require.Equal(t, "ephemeral", gjson.GetBytes(upstream.lastBody, "messages.0.content.0.cache_control.type").String())
+			}
 		})
 	}
 }
@@ -693,7 +716,7 @@ func TestForwardAsRawChatCompletions_StripsEmptyToolCallIdentity(t *testing.T) {
 func TestForwardAsRawChatCompletions_TruncatedStreamAfterOutputFailsRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	body := []byte(`{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"hello"}],"stream":true}`)
+	body := []byte(`{"model":"deepseek-v4-pro","messages":[{"role":"user","content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral"}}]}],"stream":true}`)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
@@ -717,6 +740,7 @@ func TestForwardAsRawChatCompletions_TruncatedStreamAfterOutputFailsRequest(t *t
 	result, err := svc.forwardAsRawChatCompletions(context.Background(), c, rawChatCompletionsTestAccount(), body, "")
 	require.Error(t, err)
 	require.NotNil(t, result, "已收字节的用量仍需带回，供 ops 记录首 token 时延")
+	require.True(t, result.ExplicitCache)
 	var failoverErr *UpstreamFailoverError
 	require.False(t, errors.As(err, &failoverErr), "已写出语义字节后不得再 failover")
 

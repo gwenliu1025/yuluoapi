@@ -2,6 +2,7 @@ package apicompat
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -53,14 +54,68 @@ func TestUsageConversionsPreserveCacheWriteTokens(t *testing.T) {
 	require.Equal(t, 200, roundTrip.InputTokensDetails.CacheWriteTokens)
 }
 
-func TestResponsesUsageNestedCacheWritePresenceOverridesTopLevelAlias(t *testing.T) {
+func TestUsageConversionsPreserveAliyunCacheCreationInputTokens(t *testing.T) {
+	var chatUsage ChatUsage
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"prompt_tokens":1609,
+		"completion_tokens":20,
+		"prompt_tokens_details":{"cached_tokens":0,"cache_creation_input_tokens":1605}
+	}`), &chatUsage))
+	require.NotNil(t, chatUsage.PromptTokensDetails)
+	require.Equal(t, 1605, chatUsage.PromptTokensDetails.CacheCreationInputTokens)
+	chatUsage.PromptTokensDetails.CacheWriteTokens = 12
+	chatUsage.PromptTokensDetails.CacheCreationTokens = 13
+
+	responsesUsage := ChatUsageToResponsesUsage(&chatUsage)
+	require.Equal(t, 1605, responsesUsage.CacheCreationInputTokens)
+	require.NotNil(t, responsesUsage.InputTokensDetails)
+	require.Equal(t, 1605, responsesUsage.InputTokensDetails.CacheCreationInputTokens)
+
+	roundTrip := chatUsageFromResponsesUsage(responsesUsage)
+	require.NotNil(t, roundTrip.PromptTokensDetails)
+	require.Equal(t, 1605, roundTrip.PromptTokensDetails.CacheCreationInputTokens)
+
+	anthropicUsage := chatUsageToAnthropicUsage(&chatUsage)
+	require.Equal(t, 1605, anthropicUsage.CacheCreationInputTokens)
+	require.Equal(t, 4, anthropicUsage.InputTokens)
+}
+
+func TestChatUsageCacheCreationPresenceIsCanonicalAcrossConversions(t *testing.T) {
+	tests := []struct {
+		name    string
+		details string
+		want    int
+	}{
+		{name: "official nonzero", details: `{"cache_creation_input_tokens":5,"cache_write_tokens":7,"cache_creation_tokens":8}`, want: 5},
+		{name: "legacy alias only", details: `{"cache_write_tokens":7}`, want: 7},
+		{name: "official zero overrides aliases", details: `{"cache_creation_input_tokens":0,"cache_write_tokens":7,"cache_creation_tokens":8}`, want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var usage ChatUsage
+			require.NoError(t, json.Unmarshal([]byte(`{"prompt_tokens":20,"completion_tokens":2,"prompt_tokens_details":`+tt.details+`}`), &usage))
+
+			responsesUsage := ChatUsageToResponsesUsage(&usage)
+			require.Equal(t, tt.want, responsesUsage.CacheCreationInputTokens)
+
+			anthropicUsage := chatUsageToAnthropicUsage(&usage)
+			require.Equal(t, tt.want, anthropicUsage.CacheCreationInputTokens)
+			require.Equal(t, 20-tt.want, anthropicUsage.InputTokens)
+		})
+	}
+}
+
+func TestResponsesUsageNestedCacheCreationPresenceOverridesTopLevelAlias(t *testing.T) {
 	tests := []struct {
 		name       string
 		nestedJSON string
 		want       int
 	}{
-		{name: "explicit zero", nestedJSON: `{"cache_write_tokens":0}`, want: 0},
-		{name: "nonzero", nestedJSON: `{"cache_write_tokens":7}`, want: 7},
+		{name: "cache write explicit zero", nestedJSON: `{"cache_write_tokens":0}`, want: 0},
+		{name: "cache write nonzero", nestedJSON: `{"cache_write_tokens":7}`, want: 7},
+		{name: "Aliyun explicit zero", nestedJSON: `{"cache_creation_input_tokens":0}`, want: 0},
+		{name: "Aliyun nonzero", nestedJSON: `{"cache_creation_input_tokens":1605}`, want: 1605},
 	}
 
 	for _, tt := range tests {
@@ -69,6 +124,57 @@ func TestResponsesUsageNestedCacheWritePresenceOverridesTopLevelAlias(t *testing
 			payload := []byte(`{"input_tokens":20,"output_tokens":2,"cache_creation_input_tokens":19,"input_tokens_details":` + tt.nestedJSON + `}`)
 			require.NoError(t, json.Unmarshal(payload, &usage))
 			require.Equal(t, tt.want, usage.CacheCreationInputTokens)
+		})
+	}
+}
+
+func TestResponsesUsageCanonicalCacheCreationSurvivesBothConversionsAndJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		details string
+		want    int
+	}{
+		{name: "official nonzero", details: `{"cache_creation_input_tokens":5,"cache_write_tokens":7,"cache_creation_tokens":8}`, want: 5},
+		{name: "legacy alias only", details: `{"cache_write_tokens":7}`, want: 7},
+		{name: "official zero overrides aliases", details: `{"cache_creation_input_tokens":0,"cache_write_tokens":7,"cache_creation_tokens":8}`, want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var usage ResponsesUsage
+			require.NoError(t, json.Unmarshal([]byte(`{"input_tokens":20,"output_tokens":2,"input_tokens_details":`+tt.details+`}`), &usage))
+			require.NotNil(t, usage.InputTokensDetails)
+			if strings.Contains(tt.details, "cache_creation_input_tokens") {
+				require.Zero(t, usage.InputTokensDetails.CacheWriteTokens)
+				require.Zero(t, usage.InputTokensDetails.CacheCreationTokens)
+			}
+
+			wire, err := json.Marshal(&usage)
+			require.NoError(t, err)
+			var roundTrip ResponsesUsage
+			require.NoError(t, json.Unmarshal(wire, &roundTrip))
+			require.Equal(t, tt.want, roundTrip.CacheCreationInputTokens)
+
+			chatUsage := chatUsageFromResponsesUsage(&roundTrip)
+			if tt.want == 0 {
+				if chatUsage.PromptTokensDetails != nil {
+					require.Zero(t, chatUsage.PromptTokensDetails.CacheCreationInputTokens)
+					require.Zero(t, chatUsage.PromptTokensDetails.CacheWriteTokens)
+					require.Zero(t, chatUsage.PromptTokensDetails.CacheCreationTokens)
+				}
+			} else {
+				actual := chatUsage.PromptTokensDetails.CacheCreationInputTokens
+				if actual == 0 {
+					actual = chatUsage.PromptTokensDetails.CacheWriteTokens
+				}
+				if actual == 0 {
+					actual = chatUsage.PromptTokensDetails.CacheCreationTokens
+				}
+				require.Equal(t, tt.want, actual)
+			}
+			anthropicUsage := anthropicUsageFromResponsesUsage(&roundTrip)
+			require.Equal(t, tt.want, anthropicUsage.CacheCreationInputTokens)
+			require.Equal(t, 20-tt.want, anthropicUsage.InputTokens)
 		})
 	}
 }

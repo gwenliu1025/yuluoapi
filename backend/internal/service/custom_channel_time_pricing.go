@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	// 静态发行包也携带 IANA 时区，分时计费不依赖主机安装时区数据库。
+	_ "time/tzdata"
 )
 
 var channelTimePricingLocations sync.Map

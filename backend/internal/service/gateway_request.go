@@ -1354,12 +1354,35 @@ func OpenAIBodyHasThinkingEnabled(body []byte) bool {
 	return thinkingType == "enabled" || thinkingType == "adaptive"
 }
 
-// ApplyThinkingEnabledFallback 补丁已解析出的 effort，仅在 effort 为 nil 且
-// 检测到 body 里 thinking 启用 + mappedModel 属于国产 passback-required 上游时，
-// 返回 DefaultEffortForThinkingEnabled 的默认值（"high"）。不覆盖已解析出的值。
+// ApplyThinkingEnabledFallback 根据最终上游请求体补全实际思考模式。千问 Plus 的
+// 显式开关拥有独立语义，会把已有 effort 覆盖为 "high" 或 "none"；其它模型仍只在
+// effort 为 nil 且 body 已启用 thinking 时填充国产 passback 默认值。
 //
-// 适用于 OpenAI 网关的多条路径调用方（避免重复的 if-nil 表达式）。
+// 适用于各网关的最终 wire body 入账路径，避免调用方重复维护模式规则。
 func ApplyThinkingEnabledFallback(effort *string, body []byte, mappedModel string) *string {
+	// 千问 Plus 的开关独立于 reasoning_effort；显式关闭优先，避免按思考价误扣。
+	model := strings.ToLower(strings.TrimSpace(mappedModel))
+	if slash := strings.LastIndex(model, "/"); slash >= 0 {
+		model = model[slash+1:]
+	}
+	if model == "qwen-plus" || strings.HasPrefix(model, "qwen-plus-") {
+		for _, path := range []string{"enable_thinking", "chat_template_kwargs.enable_thinking"} {
+			value := gjson.GetBytes(body, path)
+			if value.Type == gjson.True || value.Type == gjson.False {
+				mode := "none"
+				if value.Bool() {
+					mode = "high"
+				}
+				return &mode
+			}
+		}
+		// 未提供千问开关时默认非思考；通用 effort 字段不能替代厂商开关。
+		mode := "none"
+		if OpenAIBodyHasThinkingEnabled(body) {
+			mode = "high"
+		}
+		return &mode
+	}
 	if effort != nil {
 		return effort
 	}

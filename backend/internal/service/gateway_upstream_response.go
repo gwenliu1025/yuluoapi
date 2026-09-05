@@ -1068,6 +1068,9 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 					if clientDisconnected {
 						return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: true}, nil
 					}
+					if c.Writer.Written() {
+						return &streamingResult{usage: usage, firstTokenMs: firstTokenMs}, err
+					}
 					return nil, err
 				}
 

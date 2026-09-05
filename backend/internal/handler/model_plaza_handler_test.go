@@ -3,16 +3,75 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+type modelPlazaSettingRepoStub struct {
+	service.SettingRepository
+}
+
+func (modelPlazaSettingRepoStub) GetMultiple(context.Context, []string) (map[string]string, error) {
+	return map[string]string{
+		service.SettingKeyModelPlazaEnabled:     "true",
+		service.SettingKeyModelPlazaRequireAuth: "true",
+	}, nil
+}
+
+type modelPlazaChannelRepoStub struct {
+	service.ChannelRepository
+	channels []service.Channel
+}
+
+func (s modelPlazaChannelRepoStub) ListAll(context.Context) ([]service.Channel, error) {
+	return s.channels, nil
+}
+
+type modelPlazaGroupRepoStub struct {
+	service.GroupRepository
+	groups []service.Group
+}
+
+func (s modelPlazaGroupRepoStub) ListActive(context.Context) ([]service.Group, error) {
+	return s.groups, nil
+}
+
+type modelPlazaUserRepoStub struct {
+	service.UserRepository
+}
+
+func (modelPlazaUserRepoStub) GetByID(_ context.Context, userID int64) (*service.User, error) {
+	return &service.User{ID: userID}, nil
+}
+
+type modelPlazaSubscriptionRepoStub struct {
+	service.UserSubscriptionRepository
+}
+
+func (modelPlazaSubscriptionRepoStub) ListActiveByUserID(context.Context, int64) ([]service.UserSubscription, error) {
+	return nil, nil
+}
+
+type modelPlazaRateRepoStub struct {
+	service.UserGroupRateRepository
+	err   error
+	calls int
+}
+
+func (s *modelPlazaRateRepoStub) GetByUserID(context.Context, int64) (map[int64]float64, error) {
+	s.calls++
+	return nil, s.err
+}
 
 func plazaGroups() []service.PlazaGroup {
 	return []service.PlazaGroup{
@@ -24,48 +83,35 @@ func plazaGroups() []service.PlazaGroup {
 }
 
 func TestFilterPlazaVisibleGroups_AnonymousSeesOnlyNonExclusive(t *testing.T) {
-	// 匿名(allowedExclusive == nil):仅非专属分组;订阅型公开分组照常可见(橱窗语义)。
-	visible := filterPlazaVisibleGroups(plazaGroups(), nil, false)
+	// 匿名(allowedGroups == nil):仅非专属分组;订阅型公开分组照常可见(橱窗语义)。
+	visible := filterPlazaVisibleGroups(plazaGroups(), nil)
 	require.Len(t, visible, 2)
 	ids := []int64{visible[0].ID, visible[1].ID}
 	require.ElementsMatch(t, []int64{1, 3}, ids)
 }
 
-func TestFilterPlazaVisibleGroups_AuthedSeesGrantedExclusive(t *testing.T) {
-	// 登录:非专属 + 授权的专属;未授权的专属仍不可见。
-	allowed := map[int64]struct{}{2: {}}
-	visible := filterPlazaVisibleGroups(plazaGroups(), allowed, false)
-	require.Len(t, visible, 3)
-	ids := make([]int64, 0, len(visible))
-	for _, g := range visible {
-		ids = append(ids, g.ID)
-	}
-	require.ElementsMatch(t, []int64{1, 2, 3}, ids)
-}
-
-func TestFilterPlazaVisibleGroups_AuthedEmptySetSeesNoExclusive(t *testing.T) {
-	// 登录但无任何专属授权(空集合,非 nil):与匿名同样只见非专属,
-	// 但语义区分要保持——空集合不能被当作 nil 匿名分支。
-	visible := filterPlazaVisibleGroups(plazaGroups(), map[int64]struct{}{}, false)
-	require.Len(t, visible, 2)
-}
-
-func TestFilterPlazaVisibleGroups_RestrictedUserSeesOnlyGrantedPublic(t *testing.T) {
-	// 开启公开分组限制后，公开分组也必须落在授权集合内，否则用户会在广场
-	// 看到自己实际绑定不了的分组。
+func TestFilterPlazaVisibleGroups_AuthedSeesOnlyActuallyAvailableGroups(t *testing.T) {
+	// GetAvailableGroups 返回公开标准组 + 获授专属组；无有效订阅的公开订阅组不在集合中。
 	allowed := map[int64]struct{}{1: {}, 2: {}}
-	visible := filterPlazaVisibleGroups(plazaGroups(), allowed, true)
+	visible := filterPlazaVisibleGroups(plazaGroups(), allowed)
+	require.Len(t, visible, 2)
 	ids := make([]int64, 0, len(visible))
 	for _, g := range visible {
 		ids = append(ids, g.ID)
 	}
-	// 3 是未授权的公开分组，受限后不可见；4 是未授权的专属分组，一贯不可见。
 	require.ElementsMatch(t, []int64{1, 2}, ids)
 }
 
-func TestFilterPlazaVisibleGroups_RestrictionDoesNotAffectAnonymous(t *testing.T) {
-	// 匿名没有用户记录，限制标志无从谈起，可见性必须与未受限时一致。
-	visible := filterPlazaVisibleGroups(plazaGroups(), nil, true)
+func TestFilterPlazaVisibleGroups_AuthedEmptySetSeesNothing(t *testing.T) {
+	// 空集合仍是登录态的权威结果，不能降级为匿名后重新放行公开组。
+	visible := filterPlazaVisibleGroups(plazaGroups(), map[int64]struct{}{})
+	require.Empty(t, visible)
+}
+
+func TestFilterPlazaVisibleGroups_AuthedSubscriptionRequiresAvailableMembership(t *testing.T) {
+	// 有效订阅由 GetAvailableGroups 投影为分组 ID；在集合中时订阅组才可见。
+	allowed := map[int64]struct{}{1: {}, 3: {}}
+	visible := filterPlazaVisibleGroups(plazaGroups(), allowed)
 	ids := make([]int64, 0, len(visible))
 	for _, g := range visible {
 		ids = append(ids, g.ID)
@@ -83,6 +129,71 @@ func TestModelPlazaHandler_NilSettingServiceFailsClosed404(t *testing.T) {
 	h.Get(c)
 
 	require.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestModelPlazaHandler_UserRateFailureDoesNotExposeDefaultPrice(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	newRequest := func(rateRepo service.UserGroupRateRepository) *httptest.ResponseRecorder {
+		group := service.Group{
+			ID: 1, Name: "public-standard", Platform: service.PlatformAnthropic,
+			SubscriptionType: "standard", RateMultiplier: 0.8, Status: service.StatusActive,
+		}
+		groupRepo := modelPlazaGroupRepoStub{groups: []service.Group{group}}
+		plazaService := service.NewModelPlazaService(
+			modelPlazaChannelRepoStub{channels: []service.Channel{{
+				ID: 1, Name: "channel", Status: service.StatusActive, GroupIDs: []int64{1},
+				ModelPricing: []service.ChannelModelPricing{{
+					Platform: service.PlatformAnthropic, Models: []string{"test-model"},
+					BillingMode: service.BillingModeToken, InputPrice: testPtr(1e-6),
+				}},
+			}}},
+			groupRepo,
+			nil,
+			nil,
+			nil,
+		)
+		apiKeyService := service.NewAPIKeyService(
+			nil,
+			modelPlazaUserRepoStub{},
+			groupRepo,
+			modelPlazaSubscriptionRepoStub{},
+			rateRepo,
+			nil,
+			nil,
+		)
+		h := NewModelPlazaHandler(
+			plazaService,
+			apiKeyService,
+			service.NewSettingService(modelPlazaSettingRepoStub{}, nil),
+		)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/model-plaza", nil)
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
+		h.Get(c)
+		return w
+	}
+
+	t.Run("查询失败返回错误，不把默认倍率当账号实际价格", func(t *testing.T) {
+		rateRepo := &modelPlazaRateRepoStub{err: errors.New("load user group rates")}
+		w := newRequest(rateRepo)
+		require.Equal(t, http.StatusInternalServerError, w.Code)
+		require.Equal(t, 1, rateRepo.calls)
+		require.NotContains(t, w.Body.String(), "rate_multiplier")
+	})
+
+	t.Run("正常空倍率沿用分组默认倍率", func(t *testing.T) {
+		w := newRequest(nil)
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var envelope struct {
+			Data modelPlazaResponse `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+		require.Len(t, envelope.Data.Groups, 1)
+		require.InDelta(t, 0.8, envelope.Data.Groups[0].RateMultiplier, 1e-9)
+		require.Nil(t, envelope.Data.Groups[0].UserRateMultiplier)
+	})
 }
 
 func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {

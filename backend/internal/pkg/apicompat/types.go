@@ -238,11 +238,18 @@ type ResponsesRequest struct {
 	Store              *bool               `json:"store,omitempty"`
 	ParallelToolCalls  *bool               `json:"parallel_tool_calls,omitempty"`
 	Reasoning          *ResponsesReasoning `json:"reasoning,omitempty"`
+	EnableThinking     *bool               `json:"enable_thinking,omitempty"`
+	ChatTemplateKwargs *ChatTemplateKwargs `json:"chat_template_kwargs,omitempty"`
 	Text               *ResponsesText      `json:"text,omitempty"`
 	ToolChoice         json.RawMessage     `json:"tool_choice,omitempty"`
 	ServiceTier        string              `json:"service_tier,omitempty"`
 	PromptCacheKey     string              `json:"prompt_cache_key,omitempty"`
 	PreviousResponseID string              `json:"previous_response_id,omitempty"`
+}
+
+// ChatTemplateKwargs 承载千问兼容入口的嵌套思考开关；转换时规范到顶层字段。
+type ChatTemplateKwargs struct {
+	EnableThinking *bool `json:"enable_thinking,omitempty"`
 }
 
 // ResponsesReasoning configures reasoning effort in the Responses API.
@@ -309,9 +316,10 @@ func (i *ResponsesInputItem) UnmarshalJSON(data []byte) error {
 
 // ResponsesContentPart is a typed content part in a Responses message.
 type ResponsesContentPart struct {
-	Type     string `json:"type"` // "input_text" | "output_text" | "input_image" | "input_file"
-	Text     string `json:"text,omitempty"`
-	ImageURL string `json:"image_url,omitempty"` // data URI for input_image
+	Type         string                 `json:"type"` // "input_text" | "output_text" | "input_image" | "input_file"
+	Text         string                 `json:"text,omitempty"`
+	ImageURL     string                 `json:"image_url,omitempty"` // data URI for input_image
+	CacheControl *AnthropicCacheControl `json:"cache_control,omitempty"`
 
 	// input_file fields.
 	Filename string `json:"filename,omitempty"`
@@ -516,8 +524,9 @@ type ResponsesUsage struct {
 func (u *ResponsesUsage) UnmarshalJSON(data []byte) error {
 	type responsesUsageAlias ResponsesUsage
 	type cacheTokenPresence struct {
-		CacheCreationTokens *int `json:"cache_creation_tokens"`
-		CacheWriteTokens    *int `json:"cache_write_tokens"`
+		CacheCreationInputTokens *int `json:"cache_creation_input_tokens"`
+		CacheCreationTokens      *int `json:"cache_creation_tokens"`
+		CacheWriteTokens         *int `json:"cache_write_tokens"`
 	}
 	var aux struct {
 		responsesUsageAlias
@@ -563,7 +572,14 @@ func (u *ResponsesUsage) UnmarshalJSON(data []byte) error {
 		u.OutputTokensDetails = aux.CompletionTokensDetails
 	}
 	var canonicalCacheCreationTokens *int
+	officialCacheCreationTokens := false
 	switch {
+	case nestedPresence.InputTokensDetails != nil && nestedPresence.InputTokensDetails.CacheCreationInputTokens != nil:
+		canonicalCacheCreationTokens = nestedPresence.InputTokensDetails.CacheCreationInputTokens
+		officialCacheCreationTokens = true
+	case nestedPresence.PromptTokensDetails != nil && nestedPresence.PromptTokensDetails.CacheCreationInputTokens != nil:
+		canonicalCacheCreationTokens = nestedPresence.PromptTokensDetails.CacheCreationInputTokens
+		officialCacheCreationTokens = true
 	case nestedPresence.InputTokensDetails != nil && nestedPresence.InputTokensDetails.CacheWriteTokens != nil:
 		canonicalCacheCreationTokens = nestedPresence.InputTokensDetails.CacheWriteTokens
 	case nestedPresence.PromptTokensDetails != nil && nestedPresence.PromptTokensDetails.CacheWriteTokens != nil:
@@ -575,6 +591,11 @@ func (u *ResponsesUsage) UnmarshalJSON(data []byte) error {
 	}
 	if canonicalCacheCreationTokens != nil {
 		u.CacheCreationInputTokens = max(*canonicalCacheCreationTokens, 0)
+		if officialCacheCreationTokens && u.InputTokensDetails != nil {
+			u.InputTokensDetails.CacheCreationInputTokens = u.CacheCreationInputTokens
+			u.InputTokensDetails.CacheCreationTokens = 0
+			u.InputTokensDetails.CacheWriteTokens = 0
+		}
 	}
 	if u.TotalTokens == 0 && (u.InputTokens != 0 || u.OutputTokens != 0) {
 		u.TotalTokens = u.InputTokens + u.OutputTokens
@@ -584,10 +605,11 @@ func (u *ResponsesUsage) UnmarshalJSON(data []byte) error {
 
 // ResponsesInputTokensDetails breaks down input token usage.
 type ResponsesInputTokensDetails struct {
-	CachedTokens        int `json:"cached_tokens,omitempty"`
-	AudioTokens         int `json:"audio_tokens,omitempty"`
-	CacheCreationTokens int `json:"cache_creation_tokens,omitempty"`
-	CacheWriteTokens    int `json:"cache_write_tokens,omitempty"`
+	CachedTokens             int `json:"cached_tokens,omitempty"`
+	AudioTokens              int `json:"audio_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+	CacheCreationTokens      int `json:"cache_creation_tokens,omitempty"`
+	CacheWriteTokens         int `json:"cache_write_tokens,omitempty"`
 }
 
 // ResponsesOutputTokensDetails breaks down output token usage.
@@ -652,22 +674,24 @@ type ResponsesStreamEvent struct {
 
 // ChatCompletionsRequest is the request body for POST /v1/chat/completions.
 type ChatCompletionsRequest struct {
-	Model               string             `json:"model"`
-	Messages            []ChatMessage      `json:"messages"`
-	Instructions        string             `json:"instructions,omitempty"` // OpenAI Responses API compat
-	MaxTokens           *int               `json:"max_tokens,omitempty"`
-	MaxCompletionTokens *int               `json:"max_completion_tokens,omitempty"`
-	Temperature         *float64           `json:"temperature,omitempty"`
-	TopP                *float64           `json:"top_p,omitempty"`
-	Stream              bool               `json:"stream,omitempty"`
-	StreamOptions       *ChatStreamOptions `json:"stream_options,omitempty"`
-	Tools               []ChatTool         `json:"tools,omitempty"`
-	ParallelToolCalls   *bool              `json:"parallel_tool_calls,omitempty"`
-	ToolChoice          json.RawMessage    `json:"tool_choice,omitempty"`
-	ReasoningEffort     string             `json:"reasoning_effort,omitempty"` // "low" | "medium" | "high" | "xhigh"
-	ServiceTier         string             `json:"service_tier,omitempty"`
-	Stop                json.RawMessage    `json:"stop,omitempty"` // string or []string
-	ResponseFormat      json.RawMessage    `json:"response_format,omitempty"`
+	Model               string              `json:"model"`
+	Messages            []ChatMessage       `json:"messages"`
+	Instructions        string              `json:"instructions,omitempty"` // OpenAI Responses API compat
+	MaxTokens           *int                `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int                `json:"max_completion_tokens,omitempty"`
+	Temperature         *float64            `json:"temperature,omitempty"`
+	TopP                *float64            `json:"top_p,omitempty"`
+	Stream              bool                `json:"stream,omitempty"`
+	StreamOptions       *ChatStreamOptions  `json:"stream_options,omitempty"`
+	Tools               []ChatTool          `json:"tools,omitempty"`
+	ParallelToolCalls   *bool               `json:"parallel_tool_calls,omitempty"`
+	ToolChoice          json.RawMessage     `json:"tool_choice,omitempty"`
+	ReasoningEffort     string              `json:"reasoning_effort,omitempty"` // "low" | "medium" | "high" | "xhigh"
+	EnableThinking      *bool               `json:"enable_thinking,omitempty"`
+	ChatTemplateKwargs  *ChatTemplateKwargs `json:"chat_template_kwargs,omitempty"`
+	ServiceTier         string              `json:"service_tier,omitempty"`
+	Stop                json.RawMessage     `json:"stop,omitempty"` // string or []string
+	ResponseFormat      json.RawMessage     `json:"response_format,omitempty"`
 
 	// Legacy function calling (deprecated but still supported)
 	Functions    []ChatFunction  `json:"functions,omitempty"`
@@ -695,10 +719,11 @@ type ChatMessage struct {
 
 // ChatContentPart is a typed content part in a multi-modal message.
 type ChatContentPart struct {
-	Type     string        `json:"type"` // "text" | "image_url" | "file"
-	Text     string        `json:"text,omitempty"`
-	ImageURL *ChatImageURL `json:"image_url,omitempty"`
-	File     *ChatFile     `json:"file,omitempty"`
+	Type         string                 `json:"type"` // "text" | "image_url" | "file"
+	Text         string                 `json:"text,omitempty"`
+	ImageURL     *ChatImageURL          `json:"image_url,omitempty"`
+	File         *ChatFile              `json:"file,omitempty"`
+	CacheControl *AnthropicCacheControl `json:"cache_control,omitempty"`
 }
 
 // ChatImageURL contains the URL for an image content part.
@@ -792,11 +817,35 @@ type ChatUsage struct {
 type ChatTokenDetails struct {
 	CachedTokens             int `json:"cached_tokens,omitempty"`
 	AudioTokens              int `json:"audio_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
 	CacheCreationTokens      int `json:"cache_creation_tokens,omitempty"`
 	CacheWriteTokens         int `json:"cache_write_tokens,omitempty"`
 	ReasoningTokens          int `json:"reasoning_tokens,omitempty"`
 	AcceptedPredictionTokens int `json:"accepted_prediction_tokens,omitempty"`
 	RejectedPredictionTokens int `json:"rejected_prediction_tokens,omitempty"`
+}
+
+func (d *ChatTokenDetails) UnmarshalJSON(data []byte) error {
+	type alias ChatTokenDetails
+	var decoded alias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*d = ChatTokenDetails(decoded)
+
+	var presence struct {
+		CacheCreationInputTokens *int `json:"cache_creation_input_tokens"`
+	}
+	if err := json.Unmarshal(data, &presence); err != nil {
+		return err
+	}
+	if presence.CacheCreationInputTokens != nil {
+		// 官方字段存在即取得解释权，显式 0 也不得回退到历史别名。
+		d.CacheCreationInputTokens = *presence.CacheCreationInputTokens
+		d.CacheCreationTokens = 0
+		d.CacheWriteTokens = 0
+	}
+	return nil
 }
 
 // ChatCompletionsChunk is a single streaming chunk from POST /v1/chat/completions.

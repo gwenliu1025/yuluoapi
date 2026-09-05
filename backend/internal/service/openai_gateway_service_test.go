@@ -3584,6 +3584,10 @@ func TestExtractOpenAIUsageFromJSONBytes_AcceptsResponseAndChatUsageShapes(t *te
 	require.True(t, ok)
 	require.Equal(t, 6, usage.CacheCreationInputTokens)
 
+	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"prompt_tokens":1609,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":0,"cache_creation_input_tokens":1605}}}`))
+	require.True(t, ok)
+	require.Equal(t, 1605, usage.CacheCreationInputTokens)
+
 	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":20,"output_tokens":2,"cache_creation_input_tokens":19,"input_tokens_details":{"cache_write_tokens":7}}}`))
 	require.True(t, ok)
 	require.Equal(t, 7, usage.CacheCreationInputTokens, "官方嵌套字段应优先于兼容顶层别名")
@@ -3591,6 +3595,10 @@ func TestExtractOpenAIUsageFromJSONBytes_AcceptsResponseAndChatUsageShapes(t *te
 	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":20,"output_tokens":2,"cache_creation_input_tokens":19,"input_tokens_details":{"cache_write_tokens":0}}}`))
 	require.True(t, ok)
 	require.Zero(t, usage.CacheCreationInputTokens, "官方嵌套字段显式为零时仍应优先于兼容顶层别名")
+
+	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":20,"output_tokens":2,"cache_creation_tokens":19,"prompt_tokens_details":{"cache_creation_input_tokens":0}}}`))
+	require.True(t, ok)
+	require.Zero(t, usage.CacheCreationInputTokens, "阿里云官方嵌套字段显式为零时仍应优先于顶层旧字段")
 
 	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":20,"output_tokens":2,"cache_read_input_tokens":19,"input_tokens_details":{"cached_tokens":0}}}`))
 	require.True(t, ok)
@@ -3605,6 +3613,31 @@ func TestExtractOpenAIUsageFromJSONBytes_AcceptsResponseAndChatUsageShapes(t *te
 	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":10000,"output_tokens":500,"total_tokens":10500,"output_tokens_details":{"reasoning_tokens":300}}}`))
 	require.True(t, ok)
 	require.Equal(t, 500, usage.OutputTokens)
+}
+
+func TestParseSSEUsage_AliyunNestedCacheCreation(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{
+			name:    "Chat Completions 流式终包",
+			payload: `{"id":"chatcmpl_cache","object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":1609,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":0,"cache_creation_input_tokens":1605}}}`,
+		},
+		{
+			name:    "Responses 流式终包",
+			payload: `{"type":"response.completed","response":{"usage":{"input_tokens":1609,"output_tokens":20,"input_tokens_details":{"cached_tokens":0,"cache_creation_input_tokens":1605}}}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usage := &OpenAIUsage{}
+			svc.parseSSEUsage(tt.payload, usage)
+			require.Equal(t, 1605, usage.CacheCreationInputTokens)
+		})
+	}
 }
 
 func TestExtractOpenAIUsageFromJSONBytes_IncludesGrokReasoningTokens(t *testing.T) {

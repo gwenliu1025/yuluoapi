@@ -185,6 +185,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	// Calculate cost
 	tokens := UsageTokens{
+		ExplicitCache:       result.ExplicitCache,
+		ThinkingEnabled:     reasoningEffortEnablesThinking(result.ReasoningEffort),
 		InputTokens:         actualInputTokens,
 		ImageInputTokens:    result.Usage.ImageInputTokens,
 		OutputTokens:        result.Usage.OutputTokens,
@@ -471,7 +473,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if apiKey.GroupID != nil {
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
-			tokens, cost.TotalCost,
+			tokens, cost.TotalCost, pricingAt,
 		)
 	}
 

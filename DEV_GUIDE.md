@@ -14,6 +14,8 @@
 
 ## 二、本地环境配置
 
+雨落后台管理员 API 的本机环境变量和安全读取方式统一见 [雨落运维 Skill：本机管理员 API](.codex/skills/yuluoapi-ops/SKILL.md#本机管理员-api)，此文档不保存密钥值。
+
 ### PostgreSQL 16 (Windows 服务)
 
 | 配置项 | 值 |

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMessagesUsageAppliesThinkingModeFromFinalWireBody(t *testing.T) {
+	source, err := os.ReadFile("gateway_handler.go")
+	require.NoError(t, err)
+	text := string(source)
+	require.Equal(t, 2, strings.Count(text, "service.ApplyThinkingEnabledFallback("))
+	require.Contains(t, text, "service.ApplyThinkingEnabledFallback(result.ReasoningEffort, body, protocolModel)")
+	require.Contains(t, text, "service.ApplyThinkingEnabledFallback(result.ReasoningEffort, attemptParsedReq.Body.Bytes(), protocolModel)")
+}
 
 func TestUsageUnrestrictedIncludesWeeklyWindowStart(t *testing.T) {
 	gin.SetMode(gin.TestMode)

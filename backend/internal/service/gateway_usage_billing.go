@@ -825,13 +825,17 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 			// Anthropic's input_tokens excludes cache_read and cache_creation (billed separately);
 			// OpenAI gateway uses actualInputTokens which also excludes cache_read for the same reason.
 			UsageTokens{
-				InputTokens:         result.Usage.InputTokens,
-				OutputTokens:        result.Usage.OutputTokens,
-				CacheCreationTokens: result.Usage.CacheCreationInputTokens,
-				CacheReadTokens:     result.Usage.CacheReadInputTokens,
-				ImageOutputTokens:   result.Usage.ImageOutputTokens,
+				ExplicitCache:         result.ExplicitCache,
+				ThinkingEnabled:       reasoningEffortEnablesThinking(result.ReasoningEffort),
+				CacheCreation5mTokens: result.Usage.CacheCreation5mTokens,
+				CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
+				InputTokens:           result.Usage.InputTokens,
+				OutputTokens:          result.Usage.OutputTokens,
+				CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
+				CacheReadTokens:       result.Usage.CacheReadInputTokens,
+				ImageOutputTokens:     result.Usage.ImageOutputTokens,
 			},
-			cost.TotalCost,
+			cost.TotalCost, pricingAt,
 		)
 	}
 
@@ -1076,6 +1080,8 @@ func (s *GatewayService) calculateTokenCost(
 	pricingAt time.Time,
 ) *CostBreakdown {
 	tokens := UsageTokens{
+		ExplicitCache:         result.ExplicitCache,
+		ThinkingEnabled:       reasoningEffortEnablesThinking(result.ReasoningEffort),
 		InputTokens:           result.Usage.InputTokens,
 		OutputTokens:          result.Usage.OutputTokens,
 		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,

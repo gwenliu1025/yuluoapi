@@ -25,8 +25,8 @@ container --version
 ## Quick Start
 
 ```bash
-git clone --branch v0.2.001 --depth 1 https://github.com/gwenliu1025/yuluoapi.git
-cd sub2api/deploy
+git clone --branch v0.2.002 --depth 1 https://github.com/gwenliu1025/yuluoapi.git
+cd yuluoapi/deploy
 
 # Creates .env with random PostgreSQL, JWT, and TOTP secrets.
 ./apple-container.sh init
@@ -100,7 +100,7 @@ export SUB2API_ENV_FILE=/absolute/path/to/sub2api.env
 Apple-specific image overrides are available:
 
 ```dotenv
-APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.001
+APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.002
 APPLE_CONTAINER_POSTGRES_IMAGE=postgres:18-alpine
 APPLE_CONTAINER_REDIS_IMAGE=redis:8-alpine
 ```
@@ -175,7 +175,7 @@ To restore these backups into an existing stack, first ensure the image versions
 
 # Remove only the app container so a helper can mount its named volume.
 container delete sub2api-apple
-SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.001 # Match APPLE_CONTAINER_SUB2API_IMAGE in .env.
+SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.002 # Match APPLE_CONTAINER_SUB2API_IMAGE in .env.
 container run --rm --name sub2api-apple-data-restore \
   --entrypoint /bin/sh \
   --volume sub2api-apple-data:/restore \

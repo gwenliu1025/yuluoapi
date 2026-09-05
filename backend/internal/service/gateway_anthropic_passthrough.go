@@ -93,6 +93,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	}
 
 	var resp *http.Response
+	lastWireBody := input.Body
 	retryStart := time.Now()
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
 		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, input.RequestStream)
@@ -101,6 +102,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 		if err != nil {
 			return nil, err
 		}
+		lastWireBody = wireBody
 		if input.Parsed != nil && !bytes.Equal(wireBody, input.Body) {
 			// build 阶段会按 beta 能力清理 body，发送前同步到 ParsedRequest 当前视图。
 			if err := input.Parsed.ReplaceBody(wireBody); err != nil {
@@ -243,6 +245,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	if resp.StatusCode >= 400 {
 		return s.handleErrorResponse(ctx, resp, c, account, input.RequestModel)
 	}
+	explicitCache := hasEphemeralMessageOrSystemCacheControl(lastWireBody)
 
 	var usage *ClaudeUsage
 	var firstTokenMs *int
@@ -253,6 +256,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 			// 流中断时保留已观测到的 usage 与错误一起返回，避免上游已计量的请求
 			// 完全漏记漏计费（issue #5148）。
 			if partial := partialStreamUsageResult(c, resp, streamResult, input.OriginalModel, input.RequestModel, input.StartTime, err); partial != nil {
+				partial.ExplicitCache = explicitCache
 				return partial, err
 			}
 			return nil, err
@@ -273,6 +277,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	return &ForwardResult{
 		RequestID:                     resp.Header.Get("x-request-id"),
 		Usage:                         *usage,
+		ExplicitCache:                 explicitCache,
 		Model:                         input.OriginalModel,
 		UpstreamModel:                 input.RequestModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),

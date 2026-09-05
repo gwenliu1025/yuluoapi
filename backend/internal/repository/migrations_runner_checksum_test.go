@@ -1,10 +1,16 @@
 package repository
 
 import (
+	"context"
 	"testing"
+	"testing/fstest"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	dbmigrations "github.com/Wei-Shaw/sub2api/migrations"
 	"github.com/stretchr/testify/require"
 )
+
+const unknownMigrationChecksum = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 
 func TestIsMigrationChecksumCompatible(t *testing.T) {
 	t.Run("054历史checksum可兼容", func(t *testing.T) {
@@ -161,4 +167,75 @@ func TestIsMigrationChecksumCompatible(t *testing.T) {
 		)
 		require.False(t, ok)
 	})
+}
+
+func TestPublishedMigrationChecksumUpgradeCompatibility(t *testing.T) {
+	tests := []struct {
+		name            string
+		v020Checksum    string
+		v02001Checksum  string
+		legacyChecksums []string
+	}{
+		{
+			name:           "142_user_platform_quotas.sql",
+			v020Checksum:   "fe485a0663f8948174819a2d36b06f260c2dd8a8e85b6e39cd85798b75090873",
+			v02001Checksum: "ba6af6ac4442770132844bb301260019d87497bad216afe420db9247dfa78d58",
+		},
+		{
+			name:           "159_batch_image_foundation.sql",
+			v020Checksum:   "d902b70982025ec519749faf058aab7631e82c3f48167b9a4ae4db718eb72cce",
+			v02001Checksum: "e8444330ab588374c3df3fca7d7029c249166504aa74789f5c5d55159cb6f96a",
+			legacyChecksums: []string{
+				"82da85b5d98e67a0507647b873a40373e84538e4adafdeed6767c0ac8b6570b2",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			content, err := dbmigrations.FS.ReadFile(tc.name)
+			require.NoError(t, err)
+
+			require.NoError(t, runPublishedMigrationChecksumCheck(t, tc.name, content, tc.v020Checksum))
+			require.Equal(t, tc.v020Checksum, migrationChecksum(string(content)))
+			require.NoError(t, runPublishedMigrationChecksumCheck(t, tc.name, content, tc.v02001Checksum))
+			for _, checksum := range tc.legacyChecksums {
+				require.NoError(t, runPublishedMigrationChecksumCheck(t, tc.name, content, checksum))
+			}
+
+			err = runPublishedMigrationChecksumCheck(t, tc.name, content, unknownMigrationChecksum)
+			require.ErrorContains(t, err, "checksum mismatch")
+		})
+	}
+}
+
+func TestBatchImageCurrencyChangeUsesFollowupMigration(t *testing.T) {
+	foundation, err := dbmigrations.FS.ReadFile("159_batch_image_foundation.sql")
+	require.NoError(t, err)
+	require.Contains(t, string(foundation), "currency VARCHAR(16) NOT NULL DEFAULT 'USD'")
+
+	followup, err := dbmigrations.FS.ReadFile("234_billing_currency_cny.sql")
+	require.NoError(t, err)
+	require.Contains(t, string(followup), "ALTER COLUMN currency SET DEFAULT 'CNY'")
+}
+
+func runPublishedMigrationChecksumCheck(t *testing.T, name string, content []byte, dbChecksum string) error {
+	t.Helper()
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	prepareMigrationsBootstrapExpectations(mock)
+	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
+		WithArgs(name).
+		WillReturnRows(sqlmock.NewRows([]string{"checksum"}).AddRow(dbChecksum))
+	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
+		WithArgs(migrationsAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err = applyMigrationsFS(context.Background(), db, fstest.MapFS{
+		name: &fstest.MapFile{Data: content},
+	})
+	require.NoError(t, mock.ExpectationsWereMet())
+	return err
 }

@@ -63,8 +63,27 @@ func ResponsesToAnthropicRequest(req *ResponsesRequest) (*AnthropicRequest, erro
 			}
 		}
 	}
+	enableThinking := req.EnableThinking
+	if enableThinking == nil && req.ChatTemplateKwargs != nil {
+		enableThinking = req.ChatTemplateKwargs.EnableThinking
+	}
+	if enableThinking != nil && isQwenPlusModel(req.Model) {
+		if !*enableThinking {
+			out.Thinking = &AnthropicThinking{Type: "disabled"}
+		} else if out.Thinking == nil {
+			out.Thinking = &AnthropicThinking{Type: "enabled", BudgetTokens: defaultThinkingBudget("high")}
+		}
+	}
 
 	return out, nil
+}
+
+func isQwenPlusModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if slash := strings.LastIndex(model, "/"); slash >= 0 {
+		model = model[slash+1:]
+	}
+	return model == "qwen-plus" || strings.HasPrefix(model, "qwen-plus-")
 }
 
 // defaultThinkingBudget returns a sensible thinking budget based on effort level.
@@ -101,9 +120,10 @@ func mapResponsesEffortToAnthropic(effort string) string {
 // a Responses API instructions + input array. Returns the system as raw JSON
 // (for Anthropic's polymorphic system field) and a list of Anthropic messages.
 func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMessage) (json.RawMessage, []AnthropicMessage, error) {
-	var systemParts []string
+	var systemBlocks []AnthropicContentBlock
+	structuredSystem := false
 	if strings.TrimSpace(instructions) != "" {
-		systemParts = append(systemParts, strings.TrimSpace(instructions))
+		systemBlocks = append(systemBlocks, AnthropicContentBlock{Type: "text", Text: strings.TrimSpace(instructions)})
 	}
 
 	// Try as plain string input.
@@ -111,8 +131,8 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 	if err := json.Unmarshal(inputRaw, &inputStr); err == nil {
 		content, _ := json.Marshal(inputStr)
 		var system json.RawMessage
-		if len(systemParts) > 0 {
-			system, _ = json.Marshal(strings.Join(systemParts, "\n\n"))
+		if len(systemBlocks) > 0 {
+			system, _ = json.Marshal(systemBlocks[0].Text)
 		}
 		return system, []AnthropicMessage{{Role: "user", Content: content}}, nil
 	}
@@ -127,9 +147,16 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 	for _, item := range items {
 		switch {
 		case item.Role == "system" || item.Role == "developer":
-			text := extractTextFromContent(item.Content)
-			if text != "" {
-				systemParts = append(systemParts, text)
+			var parts []ResponsesContentPart
+			if err := json.Unmarshal(item.Content, &parts); err == nil {
+				for _, part := range parts {
+					if (part.Type == "input_text" || part.Type == "text") && part.Text != "" {
+						systemBlocks = append(systemBlocks, AnthropicContentBlock{Type: "text", Text: part.Text, CacheControl: part.CacheControl})
+						structuredSystem = structuredSystem || part.CacheControl != nil
+					}
+				}
+			} else if text := extractTextFromContent(item.Content); text != "" {
+				systemBlocks = append(systemBlocks, AnthropicContentBlock{Type: "text", Text: text})
 			}
 
 		case item.Type == "function_call":
@@ -234,8 +261,16 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 	messages = mergeConsecutiveMessages(messages)
 
 	var system json.RawMessage
-	if len(systemParts) > 0 {
-		system, _ = json.Marshal(strings.Join(systemParts, "\n\n"))
+	if len(systemBlocks) > 0 {
+		if structuredSystem {
+			system, _ = json.Marshal(systemBlocks)
+		} else {
+			parts := make([]string, 0, len(systemBlocks))
+			for _, block := range systemBlocks {
+				parts = append(parts, block.Text)
+			}
+			system, _ = json.Marshal(strings.Join(parts, "\n\n"))
+		}
 	}
 
 	return system, messages, nil
@@ -472,16 +507,18 @@ func convertResponsesUserToAnthropicContent(raw json.RawMessage) (json.RawMessag
 		case "input_text", "text":
 			if p.Text != "" {
 				blocks = append(blocks, AnthropicContentBlock{
-					Type: "text",
-					Text: p.Text,
+					Type:         "text",
+					Text:         p.Text,
+					CacheControl: p.CacheControl,
 				})
 			}
 		case "input_image":
 			src := dataURIToAnthropicImageSource(p.ImageURL)
 			if src != nil {
 				blocks = append(blocks, AnthropicContentBlock{
-					Type:   "image",
-					Source: src,
+					Type:         "image",
+					Source:       src,
+					CacheControl: p.CacheControl,
 				})
 			}
 		}
@@ -518,8 +555,9 @@ func convertResponsesAssistantToAnthropicContent(raw json.RawMessage) (json.RawM
 		case "output_text", "text":
 			if p.Text != "" {
 				blocks = append(blocks, AnthropicContentBlock{
-					Type: "text",
-					Text: p.Text,
+					Type:         "text",
+					Text:         p.Text,
+					CacheControl: p.CacheControl,
 				})
 			}
 		}

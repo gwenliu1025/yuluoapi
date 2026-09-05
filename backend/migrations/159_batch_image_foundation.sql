@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS batch_image_jobs (
     estimated_cost DECIMAL(20,10) NOT NULL DEFAULT 0,
     hold_amount DECIMAL(20,10),
     actual_cost DECIMAL(20,10),
-    currency VARCHAR(16) NOT NULL DEFAULT 'CNY',
+    currency VARCHAR(16) NOT NULL DEFAULT 'USD',
     hold_id VARCHAR(128),
     idempotency_key VARCHAR(255),
     request_hash VARCHAR(128),

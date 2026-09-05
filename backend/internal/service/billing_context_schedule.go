@@ -16,16 +16,17 @@ type ContextPricingBasis string
 // ContextPricingBasisWholeRequest 整单按所在档单价计价（目录阶梯、渠道区间）。
 const ContextPricingBasisWholeRequest ContextPricingBasis = "whole_request"
 
-// ContextPricingTier (MinTokens, MaxTokens] 区间内的有效 per-token 单价（USD）。
+// ContextPricingTier (MinTokens, MaxTokens] 区间内的有效 per-token 单价（CNY）。
 // nil 表示该项无价/不计费；MaxTokens 为 nil 表示无上限。
 type ContextPricingTier struct {
-	MinTokens  int
-	MaxTokens  *int
-	Label      string
-	Input      *float64
-	Output     *float64
-	CacheWrite *float64
-	CacheRead  *float64
+	ExplicitCacheRead *float64
+	MinTokens         int
+	MaxTokens         *int
+	Label             string
+	Input             *float64
+	Output            *float64
+	CacheWrite        *float64
+	CacheRead         *float64
 }
 
 // TimePricingPeriod 分时倍率时段：配置时区当天 [StartTime, EndTime) 内整单费用乘 Multiplier。
@@ -54,7 +55,9 @@ type ContextPricingSchedule struct {
 
 // ContextPricingScheduleInput 阶梯表查询输入。
 type ContextPricingScheduleInput struct {
-	Model string
+	ExplicitCache   bool
+	ThinkingEnabled bool
+	Model           string
 	// Group 为 nil 表示查官方参考价：无分组、无渠道定价，也不套用平台旧规则。
 	Group *Group
 	// Platform 为请求的具体平台（composite 分组传模型所属平台），
@@ -101,16 +104,19 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 	}
 
 	req := TokenCostRequest{
-		Ctx:            ctx,
-		Model:          in.Model,
-		Group:          in.Group,
-		RateMultiplier: 1,
-		Resolver:       resolver,
-		Resolved:       resolved,
+		Ctx:             ctx,
+		Model:           in.Model,
+		Group:           in.Group,
+		RateMultiplier:  1,
+		Resolver:        resolver,
+		Resolved:        resolved,
+		skipTimePricing: true,
 	}
 	probe := func(tokens UsageTokens) (*CostBreakdown, error) {
 		r := req
 		r.Tokens = tokens
+		r.Tokens.ThinkingEnabled = in.ThinkingEnabled
+		r.Tokens.ExplicitCache = tokens.ExplicitCache || in.ExplicitCache
 		return s.CalculateTokenCostForRequest(r)
 	}
 
@@ -132,14 +138,13 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 }
 
 // resolvedTimePricingSchedule 列出计费会生效的分时倍率时段。
-// 时段来自解析到的渠道定价配置，每个时段的倍率用计费自己的 resolvedChannelTimeMultiplier
-// 在时段内取值：定价来源不是渠道（分组价卡覆盖）、配置非法等情况下计费按 1 计，
-// 这里也就自然得到"无分时"。倍率为 1 的时段不列出。
+// 时段来自最终显式渠道配置或官方默认价卡；分组价卡覆盖时不继承官方时段。
+// 每个时段由同一计费函数取值，非法配置和倍率为 1 的时段不列出。
 func resolvedTimePricingSchedule(resolved *ResolvedPricing) *TimePricingSchedule {
-	if resolved == nil || resolved.channelPricing == nil || resolved.channelPricing.TimePricing == nil {
+	cfg := resolvedTimePricingConfig(resolved)
+	if cfg == nil {
 		return nil
 	}
-	cfg := resolved.channelPricing.TimePricing
 	location, err := loadChannelTimePricingLocation(cfg.Timezone)
 	if err != nil {
 		return nil
@@ -284,6 +289,12 @@ func probeContextTier(seg contextSegment, resolved *ResolvedPricing, probe func(
 	if err != nil {
 		return tier, err
 	}
+	if resolved.BasePricing != nil && resolved.BasePricing.ExplicitCacheReadPricePerToken != nil {
+		tier.ExplicitCacheRead, err = probeComponentPrice(func(n int) UsageTokens { return UsageTokens{CacheReadTokens: n, ExplicitCache: true} }, c, delta, probe)
+		if err != nil {
+			return tier, err
+		}
+	}
 	tier.CacheWrite, err = probeComponentPrice(func(n int) UsageTokens { return UsageTokens{CacheCreationTokens: n} }, c, delta, probe)
 	if err != nil {
 		return tier, err
@@ -393,7 +404,7 @@ func mergeEqualContextTiers(tiers []ContextPricingTier) []ContextPricingTier {
 
 func sameContextPrices(a, b ContextPricingTier) bool {
 	return samePricePtr(a.Input, b.Input) && samePricePtr(a.Output, b.Output) &&
-		samePricePtr(a.CacheWrite, b.CacheWrite) && samePricePtr(a.CacheRead, b.CacheRead)
+		samePricePtr(a.CacheWrite, b.CacheWrite) && samePricePtr(a.CacheRead, b.CacheRead) && samePricePtr(a.ExplicitCacheRead, b.ExplicitCacheRead)
 }
 
 func samePricePtr(a, b *float64) bool {
@@ -444,5 +455,6 @@ func formatContextTokenCount(n int) string {
 }
 
 func trimFloatLabel(v float64) string {
-	return strconv.FormatFloat(math.Round(v*100)/100, 'f', -1, 64)
+	// 阈值决定真实计费边界，不能将 31999 四舍五入显示为 32K。
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }

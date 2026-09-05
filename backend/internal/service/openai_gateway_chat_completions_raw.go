@@ -82,7 +82,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	}
 	reasoningEffort := extractOpenAIReasoningEffortFromBody(body, upstreamModel, billingModel, originalModel)
 	// 国产模型默认 effort 补充：需要 mappedModel 判定，推迟到 billingModel 算出之后。
-	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, billingModel)
+	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, upstreamModel)
 
 	// 3. Rewrite model in body (no protocol conversion)
 	upstreamBody := body
@@ -178,6 +178,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	if customUA == "" && account.IsGrokOAuth() {
 		customUA = defaultGrokUpstreamUserAgent()
 	}
+	explicitCache := hasEphemeralMessageOrSystemCacheControl(upstreamBody)
 	resp, err := s.sendCCUpstreamRequest(ctx, c, account, targetURL, upstreamBody, clientStream, token, customUA, grokCacheIdentity)
 	if err != nil {
 		return nil, err
@@ -237,6 +238,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	}
 	if result != nil {
 		addOpenAIUsage(&result.Usage, bridgeUsage)
+		result.ExplicitCache = explicitCache
 		result.UpstreamEndpoint = grokChatRawEndpoint
 	}
 	return result, forwardErr

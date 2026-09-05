@@ -34,6 +34,10 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 		Include:           []string{"reasoning.encrypted_content"},
 		ServiceTier:       req.ServiceTier,
 		ParallelToolCalls: req.ParallelToolCalls,
+		EnableThinking:    req.EnableThinking,
+	}
+	if out.EnableThinking == nil && req.ChatTemplateKwargs != nil {
+		out.EnableThinking = req.ChatTemplateKwargs.EnableThinking
 	}
 
 	// Reasoning models (gpt-5.x) do not accept sampling parameters.
@@ -185,6 +189,27 @@ func chatAssistantToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
 
 	if content != "" {
 		parts := []ResponsesContentPart{{Type: "output_text", Text: content}}
+		if m.ReasoningContent == "" {
+			var chatParts []ChatContentPart
+			if err := json.Unmarshal(m.Content, &chatParts); err == nil {
+				preserved := make([]ResponsesContentPart, 0, len(chatParts))
+				hasCacheControl := false
+				allText := true
+				for _, part := range chatParts {
+					if part.Type != "text" {
+						allText = false
+						break
+					}
+					if part.Text != "" {
+						preserved = append(preserved, ResponsesContentPart{Type: "output_text", Text: part.Text, CacheControl: part.CacheControl})
+						hasCacheControl = hasCacheControl || part.CacheControl != nil
+					}
+				}
+				if allText && hasCacheControl {
+					parts = preserved
+				}
+			}
+		}
 		partsJSON, err := json.Marshal(parts)
 		if err != nil {
 			return nil, err
@@ -367,24 +392,27 @@ func convertChatContentPartsToResponses(parts []ChatContentPart) []ResponsesCont
 		case "text":
 			if p.Text != "" {
 				responseParts = append(responseParts, ResponsesContentPart{
-					Type: "input_text",
-					Text: p.Text,
+					Type:         "input_text",
+					Text:         p.Text,
+					CacheControl: p.CacheControl,
 				})
 			}
 		case "image_url":
 			if p.ImageURL != nil && p.ImageURL.URL != "" && !isEmptyBase64DataURI(p.ImageURL.URL) {
 				responseParts = append(responseParts, ResponsesContentPart{
-					Type:     "input_image",
-					ImageURL: p.ImageURL.URL,
+					Type:         "input_image",
+					ImageURL:     p.ImageURL.URL,
+					CacheControl: p.CacheControl,
 				})
 			}
 		case "file":
 			if p.File != nil && (p.File.FileData != "" || p.File.FileID != "") {
 				responseParts = append(responseParts, ResponsesContentPart{
-					Type:     "input_file",
-					Filename: p.File.Filename,
-					FileData: p.File.FileData,
-					FileID:   p.File.FileID,
+					Type:         "input_file",
+					Filename:     p.File.Filename,
+					FileData:     p.File.FileData,
+					FileID:       p.File.FileID,
+					CacheControl: p.CacheControl,
 				})
 			}
 		}

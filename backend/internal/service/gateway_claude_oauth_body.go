@@ -1052,6 +1052,117 @@ func collectCacheControlPaths(body []byte) (invalidThinking []cacheControlPath, 
 	return invalidThinking, messagePaths, toolPaths, systemPaths
 }
 
+func hasEphemeralMessageOrSystemCacheControl(body []byte) bool {
+	_, messagePaths, _, systemPaths := collectCacheControlPaths(body)
+	for _, paths := range [][]string{messagePaths, systemPaths} {
+		for _, path := range paths {
+			if gjson.GetBytes(body, path+".type").String() == "ephemeral" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasEphemeralResponsesInputCacheControl(body []byte) bool {
+	found := false
+	input := gjson.GetBytes(body, "input")
+	if !input.IsArray() {
+		return false
+	}
+	input.ForEach(func(_, item gjson.Result) bool {
+		content := item.Get("content")
+		if !content.IsArray() {
+			return true
+		}
+		content.ForEach(func(_, part gjson.Result) bool {
+			if part.Get("cache_control.type").String() == "ephemeral" {
+				found = true
+				return false
+			}
+			return true
+		})
+		return !found
+	})
+	return found
+}
+
+func isQwenUpstreamModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if slash := strings.LastIndex(model, "/"); slash >= 0 {
+		model = model[slash+1:]
+	}
+	return strings.HasPrefix(model, "qwen")
+}
+
+func isQwenPlusUpstreamModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if slash := strings.LastIndex(model, "/"); slash >= 0 {
+		model = model[slash+1:]
+	}
+	return model == "qwen-plus" || strings.HasPrefix(model, "qwen-plus-")
+}
+
+// 非千问 Chat 上游不承诺识别 cache_control，转换桥写出前必须移除。
+func stripMessageOrSystemCacheControl(body []byte) []byte {
+	_, messagePaths, _, systemPaths := collectCacheControlPaths(body)
+	paths := append(messagePaths, systemPaths...)
+	for i := len(paths) - 1; i >= 0; i-- {
+		if next, ok := deleteJSONPathBytes(body, paths[i]); ok {
+			body = next
+		}
+	}
+	messages := gjson.GetBytes(body, "messages")
+	messages.ForEach(func(index, message gjson.Result) bool {
+		content := message.Get("content")
+		if !content.IsArray() {
+			return true
+		}
+		allText := true
+		var texts []string
+		content.ForEach(func(_, part gjson.Result) bool {
+			if part.Get("type").String() != "text" {
+				allText = false
+				return false
+			}
+			if text := part.Get("text").String(); text != "" {
+				texts = append(texts, text)
+			}
+			return true
+		})
+		if allText {
+			if raw, err := json.Marshal(strings.Join(texts, "\n\n")); err == nil {
+				if next, ok := setJSONRawBytes(body, fmt.Sprintf("messages.%d.content", index.Int()), raw); ok {
+					body = next
+				}
+			}
+		}
+		return true
+	})
+	return body
+}
+
+// Responses 原生协议不定义 cache_control，仅千问兼容路径保留这一扩展。
+func stripResponsesInputCacheControl(body []byte) []byte {
+	var paths []string
+	input := gjson.GetBytes(body, "input")
+	input.ForEach(func(inputIndex, item gjson.Result) bool {
+		item.Get("content").ForEach(func(contentIndex, part gjson.Result) bool {
+			if part.Get("cache_control").Exists() {
+				paths = append(paths, fmt.Sprintf("input.%d.content.%d.cache_control", inputIndex.Int(), contentIndex.Int()))
+			}
+			return true
+		})
+		return true
+	})
+	for i := len(paths) - 1; i >= 0; i-- {
+		if next, ok := deleteJSONPathBytes(body, paths[i]); ok {
+			body = next
+		}
+	}
+	return body
+}
+
 // enforceCacheControlLimit 强制执行 cache_control 块数量限制（最多 4 个）
 // 超限时优先移除工具断点，再移除 messages 断点，最后才移除 system 断点。
 func enforceCacheControlLimit(body []byte) []byte {

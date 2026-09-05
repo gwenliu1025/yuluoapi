@@ -447,6 +447,38 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		if reqStream {
 			result, handleErr := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime, reqModel, upstreamPassthroughModel)
 			if handleErr != nil {
+				if result != nil && c.Writer.Written() {
+					_ = resp.Body.Close()
+					finalUpstreamModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+					if finalUpstreamModel == "" {
+						finalUpstreamModel = upstreamPassthroughModel
+					}
+					if finalUpstreamModel == "" {
+						finalUpstreamModel = reqModel
+					}
+					partialUsage := result.usage
+					if partialUsage == nil {
+						partialUsage = &OpenAIUsage{}
+					}
+					return &OpenAIForwardResult{
+						RequestID:                     resp.Header.Get("x-request-id"),
+						ResponseID:                    strings.TrimSpace(result.responseID),
+						Usage:                         *partialUsage,
+						Model:                         reqModel,
+						UpstreamModel:                 finalUpstreamModel,
+						UpstreamResponseModel:         observedUpstreamResponseModel(c),
+						UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+						UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
+						ServiceTier:                   resolvedOpenAIUpstreamServiceTier(c, extractOpenAIServiceTierFromBody(body)),
+						ReasoningEffort: ApplyThinkingEnabledFallback(
+							extractOpenAIReasoningEffortFromBody(body, finalUpstreamModel, reqModel), body, finalUpstreamModel,
+						),
+						ExplicitCache: isQwenUpstreamModel(finalUpstreamModel) && hasEphemeralResponsesInputCacheControl(body),
+						Stream:        true,
+						Duration:      time.Since(startTime),
+						FirstTokenMs:  result.firstTokenMs,
+					}, handleErr
+				}
 				if retryBody, fallbackModel, retry := s.applyOpenAIPassthroughCompactFallbackFromSignal(
 					c, account, requestedModel, body, handleErr, compactModelFallbackRetried, resp,
 				); retry {
@@ -516,22 +548,34 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	if usage == nil {
 		usage = &OpenAIUsage{}
 	}
+	finalUpstreamModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	if finalUpstreamModel == "" {
+		finalUpstreamModel = upstreamPassthroughModel
+	}
+	if finalUpstreamModel == "" {
+		finalUpstreamModel = reqModel
+	}
 
 	forwardResult := &OpenAIForwardResult{
 		RequestID:                     resp.Header.Get("x-request-id"),
 		ResponseID:                    responseID,
 		Usage:                         *usage,
 		Model:                         reqModel,
-		UpstreamModel:                 upstreamPassthroughModel,
+		UpstreamModel:                 finalUpstreamModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
 		UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
 		ServiceTier:                   resolvedOpenAIUpstreamServiceTier(c, serviceTier),
-		ReasoningEffort:               reasoningEffort,
-		Stream:                        reqStream,
-		OpenAIWSMode:                  false,
-		Duration:                      time.Since(startTime),
-		FirstTokenMs:                  firstTokenMs,
+		ReasoningEffort: ApplyThinkingEnabledFallback(
+			extractOpenAIReasoningEffortFromBody(body, finalUpstreamModel, reqModel),
+			body,
+			finalUpstreamModel,
+		),
+		ExplicitCache: isQwenUpstreamModel(finalUpstreamModel) && hasEphemeralResponsesInputCacheControl(body),
+		Stream:        reqStream,
+		OpenAIWSMode:  false,
+		Duration:      time.Since(startTime),
+		FirstTokenMs:  firstTokenMs,
 	}
 	if imageCount > 0 {
 		forwardResult.ImageCount = imageCount

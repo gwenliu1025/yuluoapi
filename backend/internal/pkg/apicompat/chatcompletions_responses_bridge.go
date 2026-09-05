@@ -61,6 +61,10 @@ func ResponsesToChatCompletionsRequestWithOptions(req *ResponsesRequest, opts *R
 		Stream:              req.Stream,
 		ServiceTier:         req.ServiceTier,
 		ParallelToolCalls:   req.ParallelToolCalls,
+		EnableThinking:      req.EnableThinking,
+	}
+	if out.EnableThinking == nil && req.ChatTemplateKwargs != nil {
+		out.EnableThinking = req.ChatTemplateKwargs.EnableThinking
 	}
 	if req.Reasoning != nil {
 		out.ReasoningEffort = req.Reasoning.Effort
@@ -893,6 +897,7 @@ func responsesContentPartsToChatContent(rawParts []json.RawMessage, role string)
 	var textParts []string
 	var chatParts []ChatContentPart
 	hasNonText := false
+	hasCacheControl := false
 
 	for _, rawPart := range rawParts {
 		var part map[string]json.RawMessage
@@ -907,7 +912,15 @@ func responsesContentPartsToChatContent(rawParts []json.RawMessage, role string)
 				continue
 			}
 			textParts = append(textParts, text)
-			chatParts = append(chatParts, ChatContentPart{Type: "text", Text: text})
+			var cacheControl *AnthropicCacheControl
+			if raw := bytesTrimSpace(part["cache_control"]); len(raw) > 0 && string(raw) != "null" {
+				var parsed AnthropicCacheControl
+				if json.Unmarshal(raw, &parsed) == nil {
+					cacheControl = &parsed
+					hasCacheControl = true
+				}
+			}
+			chatParts = append(chatParts, ChatContentPart{Type: "text", Text: text, CacheControl: cacheControl})
 		case "input_image", "image_url":
 			imageURL := rawString(part["image_url"])
 			if imageURL == "" {
@@ -924,11 +937,11 @@ func responsesContentPartsToChatContent(rawParts []json.RawMessage, role string)
 		}
 	}
 
-	if !hasNonText {
+	if !hasNonText && !hasCacheControl {
 		joined, _ := json.Marshal(strings.Join(textParts, "\n\n"))
 		return joined, nil
 	}
-	if role != "user" {
+	if role != "user" && !hasCacheControl {
 		joined, _ := json.Marshal(strings.Join(textParts, "\n\n"))
 		return joined, nil
 	}
@@ -940,6 +953,13 @@ func responsesContentPartsToChatContent(rawParts []json.RawMessage, role string)
 }
 
 func chatContentFromSingleResponsesPart(partType string, part map[string]json.RawMessage) (json.RawMessage, error) {
+	var cacheControl *AnthropicCacheControl
+	if raw := bytesTrimSpace(part["cache_control"]); len(raw) > 0 && string(raw) != "null" {
+		var parsed AnthropicCacheControl
+		if json.Unmarshal(raw, &parsed) == nil {
+			cacheControl = &parsed
+		}
+	}
 	switch partType {
 	case "input_image", "image_url":
 		imageURL := rawString(part["image_url"])
@@ -947,10 +967,14 @@ func chatContentFromSingleResponsesPart(partType string, part map[string]json.Ra
 			imageURL = rawNestedString(part["image_url"], "url")
 		}
 		return json.Marshal([]ChatContentPart{{
-			Type:     "image_url",
-			ImageURL: &ChatImageURL{URL: imageURL},
+			Type:         "image_url",
+			ImageURL:     &ChatImageURL{URL: imageURL},
+			CacheControl: cacheControl,
 		}})
 	default:
+		if cacheControl != nil {
+			return json.Marshal([]ChatContentPart{{Type: "text", Text: rawString(part["text"]), CacheControl: cacheControl}})
+		}
 		return json.Marshal(rawString(part["text"]))
 	}
 }
@@ -1412,13 +1436,17 @@ func ChatUsageToResponsesUsage(usage *ChatUsage) *ResponsesUsage {
 		out.TotalTokens = out.InputTokens + out.OutputTokens
 	}
 	if usage.PromptTokensDetails != nil && (usage.PromptTokensDetails.CachedTokens > 0 ||
-		usage.PromptTokensDetails.CacheCreationTokens > 0 || usage.PromptTokensDetails.CacheWriteTokens > 0) {
+		usage.PromptTokensDetails.CacheCreationInputTokens > 0 || usage.PromptTokensDetails.CacheCreationTokens > 0 ||
+		usage.PromptTokensDetails.CacheWriteTokens > 0) {
 		out.InputTokensDetails = &ResponsesInputTokensDetails{
-			CachedTokens:        usage.PromptTokensDetails.CachedTokens,
-			CacheCreationTokens: usage.PromptTokensDetails.CacheCreationTokens,
-			CacheWriteTokens:    usage.PromptTokensDetails.CacheWriteTokens,
+			CachedTokens:             usage.PromptTokensDetails.CachedTokens,
+			CacheCreationInputTokens: usage.PromptTokensDetails.CacheCreationInputTokens,
+			CacheCreationTokens:      usage.PromptTokensDetails.CacheCreationTokens,
+			CacheWriteTokens:         usage.PromptTokensDetails.CacheWriteTokens,
 		}
-		if usage.PromptTokensDetails.CacheWriteTokens > 0 {
+		if usage.PromptTokensDetails.CacheCreationInputTokens > 0 {
+			out.CacheCreationInputTokens = usage.PromptTokensDetails.CacheCreationInputTokens
+		} else if usage.PromptTokensDetails.CacheWriteTokens > 0 {
 			out.CacheCreationInputTokens = usage.PromptTokensDetails.CacheWriteTokens
 		} else {
 			out.CacheCreationInputTokens = usage.PromptTokensDetails.CacheCreationTokens

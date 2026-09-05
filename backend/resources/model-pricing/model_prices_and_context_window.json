@@ -746,36 +746,11 @@
     "supports_xhigh_reasoning_effort": true
   },
   "deepseek-v4-flash": {
-    "cache_read_input_token_cost": 7e-09,
-    "input_cost_per_token": 2.2e-07,
     "litellm_provider": "deepseek",
     "max_input_tokens": 1048576,
     "max_output_tokens": 393216,
     "max_tokens": 393216,
     "mode": "chat",
-    "output_cost_per_token": 6.6e-07,
-    "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "supported_endpoints": [
-      "/v1/chat/completions"
-    ],
-    "supports_function_calling": true,
-    "supports_native_streaming": true,
-    "supports_parallel_function_calling": true,
-    "supports_prompt_caching": true,
-    "supports_reasoning": true,
-    "supports_response_schema": true,
-    "supports_system_messages": true,
-    "supports_tool_choice": true
-  },
-  "deepseek-v4-flash-vision-exp": {
-    "cache_read_input_token_cost": 7e-09,
-    "input_cost_per_token": 2.2e-07,
-    "litellm_provider": "deepseek",
-    "max_input_tokens": 1048576,
-    "max_output_tokens": 393216,
-    "max_tokens": 393216,
-    "mode": "chat",
-    "output_cost_per_token": 6.6e-07,
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
     "supported_endpoints": [
       "/v1/chat/completions"
@@ -788,17 +763,18 @@
     "supports_response_schema": true,
     "supports_system_messages": true,
     "supports_tool_choice": true,
-    "supports_vision": true
+    "currency": "CNY",
+    "pricing_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 4.5e-06,
+    "cache_read_input_token_cost": 5e-08
   },
-  "deepseek-v4-pro": {
-    "cache_read_input_token_cost": 2.2e-08,
-    "input_cost_per_token": 6.6e-07,
+  "deepseek-v4-flash-vision-exp": {
     "litellm_provider": "deepseek",
     "max_input_tokens": 1048576,
     "max_output_tokens": 393216,
     "max_tokens": 393216,
     "mode": "chat",
-    "output_cost_per_token": 1.98e-06,
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
     "supported_endpoints": [
       "/v1/chat/completions"
@@ -810,7 +786,37 @@
     "supports_reasoning": true,
     "supports_response_schema": true,
     "supports_system_messages": true,
-    "supports_tool_choice": true
+    "supports_tool_choice": true,
+    "supports_vision": true,
+    "currency": "CNY",
+    "pricing_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 4.5e-06,
+    "cache_read_input_token_cost": 5e-08
+  },
+  "deepseek-v4-pro": {
+    "litellm_provider": "deepseek",
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 393216,
+    "max_tokens": 393216,
+    "mode": "chat",
+    "source": "https://api-docs.deepseek.com/quick_start/pricing",
+    "supported_endpoints": [
+      "/v1/chat/completions"
+    ],
+    "supports_function_calling": true,
+    "supports_native_streaming": true,
+    "supports_parallel_function_calling": true,
+    "supports_prompt_caching": true,
+    "supports_reasoning": true,
+    "supports_response_schema": true,
+    "supports_system_messages": true,
+    "supports_tool_choice": true,
+    "currency": "CNY",
+    "pricing_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "input_cost_per_token": 4.5e-06,
+    "output_cost_per_token": 1.35e-05,
+    "cache_read_input_token_cost": 1.5e-07
   },
   "gemini-2.0-flash": {
     "cache_read_input_token_cost": 2.5e-08,
@@ -6324,5 +6330,586 @@
     "supports_tool_choice": true,
     "supports_vision": true,
     "supports_web_search": true
+  },
+  "kimi-k3": {
+    "currency": "CNY",
+    "litellm_provider": "moonshot",
+    "mode": "chat",
+    "pricing_source": "https://platform.kimi.com/",
+    "input_cost_per_token": 2e-05,
+    "output_cost_per_token": 0.0001,
+    "cache_read_input_token_cost": 2e-06,
+    "supports_prompt_caching": true
+  },
+  "kimi/kimi-k3": {
+    "currency": "CNY",
+    "litellm_provider": "moonshot",
+    "mode": "chat",
+    "pricing_source": "https://platform.kimi.com/",
+    "input_cost_per_token": 2e-05,
+    "output_cost_per_token": 0.0001,
+    "cache_read_input_token_cost": 2e-06,
+    "supports_prompt_caching": true
+  },
+  "kimi-k2.7-code": {
+    "currency": "CNY",
+    "litellm_provider": "moonshot",
+    "mode": "chat",
+    "pricing_source": "https://platform.kimi.com/",
+    "input_cost_per_token": 6.5e-06,
+    "output_cost_per_token": 2.7e-05,
+    "cache_read_input_token_cost": 1.3e-06,
+    "supports_prompt_caching": true
+  },
+  "kimi-k2.6": {
+    "currency": "CNY",
+    "litellm_provider": "moonshot",
+    "mode": "chat",
+    "pricing_source": "https://platform.kimi.com/",
+    "input_cost_per_token": 6.5e-06,
+    "output_cost_per_token": 2.7e-05,
+    "cache_read_input_token_cost": 1.1e-06,
+    "supports_prompt_caching": true
+  },
+  "kimi-k2.5": {
+    "currency": "CNY",
+    "litellm_provider": "moonshot",
+    "mode": "chat",
+    "pricing_source": "https://platform.kimi.com/",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 2.1e-05,
+    "cache_read_input_token_cost": 7e-07,
+    "supports_prompt_caching": true
+  },
+  "zhipu/glm-5.3": {
+    "currency": "CNY",
+    "litellm_provider": "zhipu",
+    "mode": "chat",
+    "pricing_source": "https://bigmodel.cn/pricing",
+    "input_cost_per_token": 8e-06,
+    "output_cost_per_token": 2.8e-05,
+    "cache_read_input_token_cost": 2e-06,
+    "supports_prompt_caching": true
+  },
+  "glm-5.3": {
+    "currency": "CNY",
+    "litellm_provider": "zhipu",
+    "mode": "chat",
+    "pricing_source": "https://bigmodel.cn/pricing",
+    "input_cost_per_token": 8e-06,
+    "output_cost_per_token": 2.8e-05,
+    "cache_read_input_token_cost": 2e-06,
+    "supports_prompt_caching": true
+  },
+  "glm-5.2": {
+    "currency": "CNY",
+    "litellm_provider": "zhipu",
+    "mode": "chat",
+    "pricing_source": "https://bigmodel.cn/pricing",
+    "input_cost_per_token": 8e-06,
+    "output_cost_per_token": 2.8e-05,
+    "cache_read_input_token_cost": 2e-06,
+    "supports_prompt_caching": true
+  },
+  "zhipu/glm-5.3-flash": {
+    "currency": "CNY",
+    "litellm_provider": "zhipu",
+    "mode": "chat",
+    "pricing_source": "https://bigmodel.cn/pricing",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2.8e-06,
+    "cache_read_input_token_cost": 2.3e-07,
+    "supports_prompt_caching": true
+  },
+  "glm-5.3-flash": {
+    "currency": "CNY",
+    "litellm_provider": "zhipu",
+    "mode": "chat",
+    "pricing_source": "https://bigmodel.cn/pricing",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2.8e-06,
+    "cache_read_input_token_cost": 2.3e-07,
+    "supports_prompt_caching": true
+  },
+  "glm-5.2-fast-preview": {
+    "currency": "CNY",
+    "litellm_provider": "zhipu",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 1.6e-05,
+    "output_cost_per_token": 5.6e-05,
+    "cache_read_input_token_cost": 4e-06,
+    "supports_prompt_caching": true
+  },
+  "glm-5.1": {
+    "currency": "CNY",
+    "litellm_provider": "zhipu",
+    "mode": "chat",
+    "pricing_source": "https://bigmodel.cn/pricing",
+    "input_cost_per_token": 6e-06,
+    "output_cost_per_token": 2.4e-05,
+    "cache_read_input_token_cost": 1.3e-06,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 31999,
+        "input_price": 6e-06,
+        "output_price": 2.4e-05,
+        "cache_read_price": 1.3e-06
+      },
+      {
+        "min_tokens": 31999,
+        "max_tokens": null,
+        "input_price": 8e-06,
+        "output_price": 2.8e-05,
+        "cache_read_price": 2e-06
+      }
+    ]
+  },
+  "glm-5": {
+    "currency": "CNY",
+    "litellm_provider": "zhipu",
+    "mode": "chat",
+    "pricing_source": "https://bigmodel.cn/pricing",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 1.8e-05,
+    "cache_read_input_token_cost": 1e-06,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 31999,
+        "input_price": 4e-06,
+        "output_price": 1.8e-05,
+        "cache_read_price": 1e-06
+      },
+      {
+        "min_tokens": 31999,
+        "max_tokens": null,
+        "input_price": 6e-06,
+        "output_price": 2.2e-05,
+        "cache_read_price": 1.5e-06
+      }
+    ]
+  },
+  "qwen3.8-max": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/qwen3-8-max",
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "cache_creation_input_token_cost": 1.5e-05,
+    "cache_read_input_token_cost": 1.5e-06,
+    "cache_read_input_token_cost_explicit": 1e-06,
+    "supports_prompt_caching": true
+  },
+  "qwen3.7-max": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "cache_creation_input_token_cost": 1.5e-05,
+    "cache_read_input_token_cost": 2.4e-06,
+    "cache_read_input_token_cost_explicit": 1.2e-06,
+    "supports_prompt_caching": true
+  },
+  "qwen3.8-flash": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/qwen3-8-flash",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2.7e-06,
+    "cache_creation_input_token_cost": 1.25e-06,
+    "cache_read_input_token_cost": 1e-07,
+    "cache_read_input_token_cost_explicit": 1e-07,
+    "supports_prompt_caching": true
+  },
+  "qwen3.7-plus": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 8e-06,
+    "cache_creation_input_token_cost": 2.5e-06,
+    "cache_read_input_token_cost": 4e-07,
+    "cache_read_input_token_cost_explicit": 2e-07,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 256000,
+        "input_price": 2e-06,
+        "output_price": 8e-06,
+        "cache_write_price": 2.5e-06,
+        "cache_read_price": 4e-07,
+        "explicit_cache_read_price": 2e-07
+      },
+      {
+        "min_tokens": 256000,
+        "max_tokens": null,
+        "input_price": 6e-06,
+        "output_price": 2.4e-05,
+        "cache_write_price": 7.5e-06,
+        "cache_read_price": 1.2e-06,
+        "explicit_cache_read_price": 6e-07
+      }
+    ]
+  },
+  "qwen3.7-flash": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 2e-07,
+    "output_cost_per_token": 8e-07,
+    "cache_creation_input_token_cost": 2.5e-07,
+    "cache_read_input_token_cost": 4e-08,
+    "cache_read_input_token_cost_explicit": 2e-08,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 32000,
+        "input_price": 2e-07,
+        "output_price": 8e-07,
+        "cache_write_price": 2.5e-07,
+        "cache_read_price": 4e-08,
+        "explicit_cache_read_price": 2e-08
+      },
+      {
+        "min_tokens": 32000,
+        "max_tokens": 256000,
+        "input_price": 6e-07,
+        "output_price": 2.4e-06,
+        "cache_write_price": 7.5e-07,
+        "cache_read_price": 1.2e-07,
+        "explicit_cache_read_price": 6e-08
+      },
+      {
+        "min_tokens": 256000,
+        "max_tokens": null,
+        "input_price": 1.2e-06,
+        "output_price": 4.8e-06,
+        "cache_write_price": 1.5e-06,
+        "cache_read_price": 2.4e-07,
+        "explicit_cache_read_price": 1.2e-07
+      }
+    ]
+  },
+  "qwen3.6-max-preview": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 9e-06,
+    "output_cost_per_token": 5.4e-05,
+    "cache_creation_input_token_cost": 1.125e-05,
+    "cache_read_input_token_cost": 1.8e-06,
+    "cache_read_input_token_cost_explicit": 9e-07,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 128000,
+        "input_price": 9e-06,
+        "output_price": 5.4e-05,
+        "cache_write_price": 1.125e-05,
+        "cache_read_price": 1.8e-06,
+        "explicit_cache_read_price": 9e-07
+      },
+      {
+        "min_tokens": 128000,
+        "max_tokens": null,
+        "input_price": 1.5e-05,
+        "output_price": 9e-05,
+        "cache_write_price": 1.875e-05,
+        "cache_read_price": 3e-06,
+        "explicit_cache_read_price": 1.5e-06
+      }
+    ]
+  },
+  "qwen3.6-plus": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1.2e-05,
+    "cache_creation_input_token_cost": 2.5e-06,
+    "cache_read_input_token_cost": 4e-07,
+    "cache_read_input_token_cost_explicit": 2e-07,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 256000,
+        "input_price": 2e-06,
+        "output_price": 1.2e-05,
+        "cache_write_price": 2.5e-06,
+        "cache_read_price": 4e-07,
+        "explicit_cache_read_price": 2e-07
+      },
+      {
+        "min_tokens": 256000,
+        "max_tokens": null,
+        "input_price": 8e-06,
+        "output_price": 4.8e-05,
+        "cache_write_price": 1e-05,
+        "cache_read_price": 1.6e-06,
+        "explicit_cache_read_price": 8e-07
+      }
+    ]
+  },
+  "qwen3.6-flash": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 1.2e-06,
+    "output_cost_per_token": 7.2e-06,
+    "cache_creation_input_token_cost": 1.5e-06,
+    "cache_read_input_token_cost": 2.4e-07,
+    "cache_read_input_token_cost_explicit": 1.2e-07,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 256000,
+        "input_price": 1.2e-06,
+        "output_price": 7.2e-06,
+        "cache_write_price": 1.5e-06,
+        "cache_read_price": 2.4e-07,
+        "explicit_cache_read_price": 1.2e-07
+      },
+      {
+        "min_tokens": 256000,
+        "max_tokens": null,
+        "input_price": 4.8e-06,
+        "output_price": 2.88e-05,
+        "cache_write_price": 6e-06,
+        "cache_read_price": 9.6e-07,
+        "explicit_cache_read_price": 4.8e-07
+      }
+    ]
+  },
+  "qwen3.5-plus": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 4.8e-06,
+    "cache_creation_input_token_cost": 1e-06,
+    "cache_read_input_token_cost": 1.6e-07,
+    "cache_read_input_token_cost_explicit": 8e-08,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 128000,
+        "input_price": 8e-07,
+        "output_price": 4.8e-06,
+        "cache_write_price": 1e-06,
+        "cache_read_price": 1.6e-07,
+        "explicit_cache_read_price": 8e-08
+      },
+      {
+        "min_tokens": 128000,
+        "max_tokens": 256000,
+        "input_price": 2e-06,
+        "output_price": 1.2e-05,
+        "cache_write_price": 2.5e-06,
+        "cache_read_price": 4e-07,
+        "explicit_cache_read_price": 2e-07
+      },
+      {
+        "min_tokens": 256000,
+        "max_tokens": null,
+        "input_price": 4e-06,
+        "output_price": 2.4e-05,
+        "cache_write_price": 5e-06,
+        "cache_read_price": 8e-07,
+        "explicit_cache_read_price": 4e-07
+      }
+    ]
+  },
+  "qwen3.5-flash": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 2e-07,
+    "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 2.5e-07,
+    "cache_read_input_token_cost": 4e-08,
+    "cache_read_input_token_cost_explicit": 2e-08,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 128000,
+        "input_price": 2e-07,
+        "output_price": 2e-06,
+        "cache_write_price": 2.5e-07,
+        "cache_read_price": 4e-08,
+        "explicit_cache_read_price": 2e-08
+      },
+      {
+        "min_tokens": 128000,
+        "max_tokens": 256000,
+        "input_price": 8e-07,
+        "output_price": 8e-06,
+        "cache_write_price": 1e-06,
+        "cache_read_price": 1.6e-07,
+        "explicit_cache_read_price": 8e-08
+      },
+      {
+        "min_tokens": 256000,
+        "max_tokens": null,
+        "input_price": 1.2e-06,
+        "output_price": 1.2e-05,
+        "cache_write_price": 1.5e-06,
+        "cache_read_price": 2.4e-07,
+        "explicit_cache_read_price": 1.2e-07
+      }
+    ]
+  },
+  "qwen3.5-397b-a17b": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 1.2e-06,
+    "output_cost_per_token": 7.2e-06,
+    "supports_prompt_caching": false,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 128000,
+        "input_price": 1.2e-06,
+        "output_price": 7.2e-06
+      },
+      {
+        "min_tokens": 128000,
+        "max_tokens": null,
+        "input_price": 3e-06,
+        "output_price": 1.8e-05
+      }
+    ]
+  },
+  "qwen3.5-27b": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 4.8e-06,
+    "supports_prompt_caching": false,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 128000,
+        "input_price": 6e-07,
+        "output_price": 4.8e-06
+      },
+      {
+        "min_tokens": 128000,
+        "max_tokens": null,
+        "input_price": 1.8e-06,
+        "output_price": 1.44e-05
+      }
+    ]
+  },
+  "qwen-flash": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 1.5e-07,
+    "output_cost_per_token": 1.5e-06,
+    "cache_creation_input_token_cost": 1.88e-07,
+    "cache_read_input_token_cost": 3e-08,
+    "cache_read_input_token_cost_explicit": 1.5e-08,
+    "supports_prompt_caching": true,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 128000,
+        "input_price": 1.5e-07,
+        "output_price": 1.5e-06,
+        "cache_write_price": 1.88e-07,
+        "cache_read_price": 3e-08,
+        "explicit_cache_read_price": 1.5e-08
+      },
+      {
+        "min_tokens": 128000,
+        "max_tokens": 256000,
+        "input_price": 6e-07,
+        "output_price": 6e-06,
+        "cache_write_price": 7.5e-07,
+        "cache_read_price": 1.2e-07,
+        "explicit_cache_read_price": 6e-08
+      },
+      {
+        "min_tokens": 256000,
+        "max_tokens": null,
+        "input_price": 1.2e-06,
+        "output_price": 1.2e-05,
+        "cache_write_price": 1.5e-06,
+        "cache_read_price": 2.4e-07,
+        "explicit_cache_read_price": 1.2e-07
+      }
+    ]
+  },
+  "qwen-plus": {
+    "currency": "CNY",
+    "litellm_provider": "dashscope",
+    "mode": "chat",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 1e-06,
+    "cache_read_input_token_cost": 1.6e-07,
+    "cache_read_input_token_cost_explicit": 8e-08,
+    "supports_prompt_caching": true,
+    "output_cost_per_token_thinking": 8e-06,
+    "pricing_intervals": [
+      {
+        "min_tokens": 0,
+        "max_tokens": 128000,
+        "input_price": 8e-07,
+        "output_price": 2e-06,
+        "cache_write_price": 1e-06,
+        "cache_read_price": 1.6e-07,
+        "explicit_cache_read_price": 8e-08,
+        "thinking_output_price": 8e-06
+      },
+      {
+        "min_tokens": 128000,
+        "max_tokens": 256000,
+        "input_price": 2.4e-06,
+        "output_price": 2e-05,
+        "cache_write_price": 3e-06,
+        "cache_read_price": 4.8e-07,
+        "explicit_cache_read_price": 2.4e-07,
+        "thinking_output_price": 2.4e-05
+      },
+      {
+        "min_tokens": 256000,
+        "max_tokens": null,
+        "input_price": 4.8e-06,
+        "output_price": 4.8e-05,
+        "cache_write_price": 6e-06,
+        "cache_read_price": 9.6e-07,
+        "explicit_cache_read_price": 4.8e-07,
+        "thinking_output_price": 6.4e-05
+      }
+    ]
   }
 }

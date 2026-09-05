@@ -396,16 +396,16 @@ func TestForwardAsAnthropic_ForceChatCompletionsNonFailover400UsesSharedErrorHan
 func TestForwardAsAnthropic_ForceChatCompletionsStreamReadErrorSkipsFinalize(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	body := []byte(`{"model":"gpt-5.4","max_tokens":8,"messages":[{"role":"user","content":"hello"}],"stream":true}`)
+	body := []byte(`{"model":"qwen-plus","max_tokens":8,"thinking":{"type":"enabled","budget_tokens":1024},"messages":[{"role":"user","content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral"}}]}],"stream":true}`)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	partial := strings.Join([]string{
-		`data: {"id":"chatcmpl_e","object":"chat.completion.chunk","model":"gpt-5.4","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl_e","object":"chat.completion.chunk","model":"qwen-plus","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}`,
 		"",
-		`data: {"id":"chatcmpl_e","object":"chat.completion.chunk","model":"gpt-5.4","choices":[{"index":0,"delta":{"content":"he"},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl_e","object":"chat.completion.chunk","model":"qwen-plus","choices":[{"index":0,"delta":{"content":"he"},"finish_reason":null}]}`,
 		"",
 		"",
 	}, "\n")
@@ -424,6 +424,11 @@ func TestForwardAsAnthropic_ForceChatCompletionsStreamReadErrorSkipsFinalize(t *
 	require.Contains(t, err.Error(), "stream usage incomplete")
 	require.NotNil(t, result)
 	require.True(t, result.Stream)
+	require.True(t, result.ExplicitCache)
+	require.NotNil(t, result.ReasoningEffort)
+	require.Equal(t, "high", *result.ReasoningEffort)
+	require.True(t, gjson.GetBytes(upstream.lastBody, "enable_thinking").Bool())
+	require.Equal(t, "ephemeral", gjson.GetBytes(upstream.lastBody, "messages.0.content.0.cache_control.type").String())
 
 	out := rec.Body.String()
 	require.Contains(t, out, `"text":"he"`, "delta emitted before the failure must reach the client")

@@ -785,6 +785,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	if parsed.OnUpstreamAccepted != nil {
 		parsed.OnUpstreamAccepted()
 	}
+	explicitCache := hasEphemeralMessageOrSystemCacheControl(lastWireBody)
 
 	var usage *ClaudeUsage
 	var firstTokenMs *int
@@ -837,6 +838,13 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					account.ID, account.Name, resp.Header.Get("x-request-id"),
 					truncateString(sseErr.RawData, 1000),
 				)
+				if c.Writer.Size() != writerSizeBeforeStream {
+					if partial := partialStreamUsageResult(c, resp, streamResult, originalModel, mappedModel, startTime, err); partial != nil {
+						partial.ExplicitCache = explicitCache
+						return partial, err
+					}
+					return nil, err
+				}
 
 				return nil, &UpstreamFailoverError{
 					StatusCode:   semanticStatus,
@@ -846,6 +854,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			// 流中断（缺失 terminal 事件、读错误、数据间隔超时等）时保留已观测到的
 			// usage 与错误一起返回，handler 在错误处理完成后照常提交 usage 记录。
 			if partial := partialStreamUsageResult(c, resp, streamResult, originalModel, mappedModel, startTime, err); partial != nil {
+				partial.ExplicitCache = explicitCache
 				return partial, err
 			}
 			return nil, err
@@ -863,6 +872,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	return &ForwardResult{
 		RequestID:                     resp.Header.Get("x-request-id"),
 		Usage:                         *usage,
+		ExplicitCache:                 explicitCache,
 		Model:                         originalModel, // 使用原始模型用于计费和日志
 		UpstreamModel:                 mappedModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),

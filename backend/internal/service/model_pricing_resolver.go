@@ -114,6 +114,9 @@ func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) 
 		SupportsCacheBreakdown: basePricing != nil && basePricing.SupportsCacheBreakdown,
 	}
 	resolved.longContextPricingEnabled = longContextPricingEnabled
+	if basePricing != nil {
+		resolved.Intervals = basePricing.Intervals
+	}
 
 	// 2. 如果有 GroupID，尝试渠道覆盖
 	if chPricing != nil {
@@ -233,6 +236,7 @@ func (r *ModelPricingResolver) applyTokenOverrides(chPricing *ChannelModelPricin
 		resolved.BasePricing = &cloned
 	}
 
+	official := *resolved.BasePricing
 	applyChannelTokenPriceOverrides(resolved.BasePricing, chPricing)
 	if chPricing.CacheWrite1hPrice != nil {
 		resolved.SupportsCacheBreakdown = true
@@ -258,6 +262,25 @@ func (r *ModelPricingResolver) applyTokenOverrides(chPricing *ChannelModelPricin
 
 	// 区间未命中时回退到上面已经应用渠道覆盖的基础价。
 	resolved.Intervals = filterValidIntervals(chPricing.Intervals)
+	if len(resolved.Intervals) == 0 && len(official.Intervals) > 0 {
+		// 平价卡仍沿用官方上下文档差；先折成倍率，再交同一个区间引擎执行。
+		for _, iv := range official.Intervals {
+			ratio := func(price *float64, base float64) *float64 {
+				if price == nil || base <= 0 {
+					return nil
+				}
+				v := *price / base
+				return &v
+			}
+			resolved.Intervals = append(resolved.Intervals, PricingInterval{
+				MinTokens: iv.MinTokens, MaxTokens: iv.MaxTokens, TierLabel: iv.TierLabel,
+				InputMultiplier:      ratio(iv.InputPrice, official.InputPricePerToken),
+				OutputMultiplier:     ratio(iv.OutputPrice, official.OutputPricePerToken),
+				CacheWriteMultiplier: ratio(iv.CacheWritePrice, official.CacheCreationPricePerToken),
+				CacheReadMultiplier:  ratio(iv.CacheReadPrice, official.CacheReadPricePerToken),
+			})
+		}
+	}
 }
 
 // applyChannelImageInputPrice 应用渠道图片输入价：显式配置则用配置值；
@@ -321,6 +344,12 @@ func intervalToModelPricing(iv *PricingInterval, base *ModelPricing, chPricing *
 	pricing := &ModelPricing{}
 	if base != nil {
 		*pricing = *base
+	}
+	if iv.ExplicitCacheReadPrice != nil {
+		pricing.ExplicitCacheReadPricePerToken = iv.ExplicitCacheReadPrice
+	}
+	if iv.ThinkingOutputPrice != nil {
+		pricing.ThinkingOutputPricePerToken = iv.ThinkingOutputPrice
 	}
 	applyMultiplier := func(value float64, multiplier *float64) float64 {
 		if multiplier == nil {

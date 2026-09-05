@@ -110,7 +110,7 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardStreamPreservesBodyAnd
 	c.Request.Header.Set("Cookie", "secret=1")
 	c.Request.Header.Set("Anthropic-Beta", "interleaved-thinking-2025-05-14")
 
-	body := []byte(`{"model":"claude-3-7-sonnet-20250219","stream":true,"system":[{"type":"text","text":"x-anthropic-billing-header keep"}],"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`)
+	body := []byte(`{"model":"claude-3-7-sonnet-20250219","stream":true,"system":[{"type":"text","text":"x-anthropic-billing-header keep","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`)
 	parsed := &ParsedRequest{
 		Body:   NewRequestBodyRef(body),
 		Model:  "claude-3-7-sonnet-20250219",
@@ -173,8 +173,10 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardStreamPreservesBodyAnd
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.True(t, result.Stream)
+	require.True(t, result.ExplicitCache)
 
 	require.Equal(t, "claude-3-haiku-20240307", gjson.GetBytes(upstream.lastBody, "model").String(), "透传模式应应用账号级模型映射")
+	require.Equal(t, "ephemeral", gjson.GetBytes(upstream.lastBody, "system.0.cache_control.type").String())
 
 	require.Equal(t, "upstream-anthropic-key", getHeaderRaw(upstream.lastReq.Header, "x-api-key"))
 	require.Empty(t, getHeaderRaw(upstream.lastReq.Header, "authorization"))
@@ -906,6 +908,7 @@ func TestGatewayService_AnthropicOAuthMimic_RewritesSystemWithBillingBlock(t *te
 			result, err := svc.Forward(context.Background(), c, account, parsed)
 			require.NoError(t, err)
 			require.NotNil(t, result)
+			require.True(t, result.ExplicitCache, "最终 wire body 的扩充块带显式缓存断点")
 			require.NotNil(t, upstream.lastReq)
 			require.Equal(t, "Bearer oauth-token", getHeaderRaw(upstream.lastReq.Header, "authorization"))
 			finalBeta := getHeaderRaw(upstream.lastReq.Header, "anthropic-beta")

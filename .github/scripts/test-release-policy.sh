@@ -52,8 +52,8 @@ require_contains ".github/workflows/backend-ci.yml" '.github/scripts/test-valida
 require_contains ".github/workflows/backend-ci.yml" '.github/scripts/test-release-policy.sh'
 require_contains ".github/workflows/backend-ci.yml" "python3 -m unittest discover -s deploy/updater/tests -p 'test_*.py'"
 
-require_exact_line "$version_file" "0.2.001"
-require_exact_line "deploy/.env.example" "SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.001"
+require_exact_line "$version_file" "0.2.002"
+require_exact_line "deploy/.env.example" "SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.002"
 require_contains "$workflow" 'tags:'
 require_contains "$workflow" '"v*"'
 require_contains "$workflow" 'workflow_dispatch:'
@@ -87,10 +87,10 @@ require_absent "frontend/src/components/common/VersionBadge.vue" 'Wei-Shaw/sub2a
 require_absent "frontend/src/components/common/VersionBadge.vue" 'weishaw/sub2api'
 require_exact_line "deploy/install.sh" 'GITHUB_REPO="gwenliu1025/yuluoapi"'
 require_absent "deploy/install.sh" 'Wei-Shaw/sub2api'
-require_contains "deploy/docker-deploy.sh" 'https://raw.githubusercontent.com/gwenliu1025/yuluoapi/v0.2.001/deploy'
+require_contains "deploy/docker-deploy.sh" 'https://raw.githubusercontent.com/gwenliu1025/yuluoapi/v0.2.002/deploy'
 require_absent "deploy/docker-deploy.sh" 'Wei-Shaw/sub2api'
-require_exact_line "deploy/.env.example" 'APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.001'
-require_contains "deploy/apple-container.sh" 'ghcr.io/gwenliu1025/yuluoapi:0.2.001'
+require_exact_line "deploy/.env.example" 'APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/gwenliu1025/yuluoapi:0.2.002'
+require_contains "deploy/apple-container.sh" 'ghcr.io/gwenliu1025/yuluoapi:0.2.002'
 require_absent "deploy/apple-container.sh" 'weishaw/sub2api:latest'
 require_contains "deploy/updater/config.example.json" '"socket_gid": 1000'
 require_contains "deploy/updater/config.example.json" '"image_repository": "ghcr.io/gwenliu1025/yuluoapi"'
@@ -101,13 +101,17 @@ require_contains "deploy/updater/README.md" '--app-uid 1000'
 require_contains "deploy/updater/README.md" '--socket-gid 1000'
 require_absent "deploy/updater/config.example.json" 'gwenliu1025/sub2api'
 
-require_exact_line "deploy/docker-deploy.sh" 'GITHUB_RAW_URL="https://raw.githubusercontent.com/gwenliu1025/yuluoapi/v0.2.001/deploy"'
+require_exact_line "deploy/docker-deploy.sh" 'GITHUB_RAW_URL="https://raw.githubusercontent.com/gwenliu1025/yuluoapi/v0.2.002/deploy"'
 for release_doc in deploy/README.md deploy/DOCKER.md deploy/APPLE_CONTAINER.md; do
   require_absent "$release_doc" 'Wei-Shaw/sub2api'
   require_absent "$release_doc" 'weishaw/sub2api'
   require_absent "$release_doc" 'sub2api:latest'
-  require_contains "$release_doc" 'ghcr.io/gwenliu1025/yuluoapi:0.2.001'
+  require_contains "$release_doc" 'ghcr.io/gwenliu1025/yuluoapi:0.2.002'
 done
+
+# git clone 未指定目录时使用仓库名，后续命令必须进入同一目录。
+require_contains "deploy/README.md" 'cd yuluoapi/deploy'
+require_contains "deploy/APPLE_CONTAINER.md" 'cd yuluoapi/deploy'
 
 require_absent "$goreleaser" 'dockers:'
 require_absent "$goreleaser" 'docker_manifests:'
@@ -129,7 +133,7 @@ require_contains "$goreleaser" '> 雨落 API · AI API 网关平台'
 require_contains "$goreleaser" '## 文档'
 
 for compose in $compose_files; do
-  require_contains "$compose" 'image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/yuluoapi:0.2.001}'
+  require_contains "$compose" 'image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/yuluoapi:0.2.002}'
   require_absent "$compose" 'weishaw/sub2api:latest'
 done
 

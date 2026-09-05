@@ -132,9 +132,16 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 			if err != nil {
 				return nil, fmt.Errorf("convert responses-shaped chat completions request: %w", err)
 			}
+			mappedModel := normalizeOpenAIModelForUpstream(account, resolveOpenAIForwardModel(account, responsesReq.Model, defaultMappedModel))
+			if !isQwenPlusUpstreamModel(mappedModel) {
+				chatReq.EnableThinking = nil
+			}
 			chatBody, err := json.Marshal(chatReq)
 			if err != nil {
 				return nil, fmt.Errorf("marshal converted chat completions request: %w", err)
+			}
+			if !isQwenUpstreamModel(mappedModel) {
+				chatBody = stripMessageOrSystemCacheControl(chatBody)
 			}
 			return s.forwardAsRawChatCompletions(ctx, c, account, chatBody, defaultMappedModel)
 		}
@@ -235,6 +242,9 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 			return nil, fmt.Errorf("convert chat completions to responses: %w", err)
 		}
 		responsesReq.Model = upstreamModel
+		if !isQwenPlusUpstreamModel(upstreamModel) {
+			responsesReq.EnableThinking = nil
+		}
 		normalizeResponsesRequestServiceTier(responsesReq)
 		responsesBody, err = json.Marshal(responsesReq)
 		if err != nil {
@@ -322,6 +332,9 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 	}
 	responsesBody = updatedBody
 	responsesReq.ServiceTier = normalizedOpenAIServiceTierValue(gjson.GetBytes(responsesBody, "service_tier").String())
+	if !isQwenUpstreamModel(upstreamModel) {
+		responsesBody = stripResponsesInputCacheControl(responsesBody)
+	}
 
 	// 5. Get access token
 	token, _, err := s.GetAccessToken(ctx, account)
@@ -401,18 +414,22 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 		return nil, handleErr
 	}
 
-	// Propagate ServiceTier and ReasoningEffort to result for billing.
+	// Propagate final wire metadata to result for billing.
 	// 计费 tier 优先采用上游回显值；上游未回显时回退到最终出站 body（经过
 	// fast policy filter/force 之后）里的 tier，policy filter 删掉字段后不再
 	// 按原请求 Fast 计费。
-	if handleErr == nil && result != nil {
-		if tier := resolvedOpenAIUpstreamServiceTier(c, extractOpenAIServiceTierFromBody(responsesBody)); tier != nil {
-			result.ServiceTier = tier
+	if result != nil {
+		if handleErr == nil {
+			if tier := resolvedOpenAIUpstreamServiceTier(c, extractOpenAIServiceTierFromBody(responsesBody)); tier != nil {
+				result.ServiceTier = tier
+			}
 		}
-		if responsesReq.Reasoning != nil && responsesReq.Reasoning.Effort != "" {
-			re := responsesReq.Reasoning.Effort
-			result.ReasoningEffort = &re
-		}
+		result.ReasoningEffort = ApplyThinkingEnabledFallback(
+			extractOpenAIReasoningEffortFromBody(responsesBody, upstreamModel, billingModel, originalModel),
+			responsesBody,
+			upstreamModel,
+		)
+		result.ExplicitCache = hasEphemeralResponsesInputCacheControl(responsesBody)
 	}
 
 	// Extract and save Codex usage snapshot from response headers (for OAuth accounts).

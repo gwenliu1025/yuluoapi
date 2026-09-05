@@ -86,7 +86,7 @@ func TestGatewayService_Forward_StreamMissingTerminalPreservesPartialUsage(t *te
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
-	body := []byte(`{"model":"claude-3-5-sonnet-latest","stream":true,"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`)
+	body := []byte(`{"model":"claude-3-5-sonnet-latest","stream":true,"system":[{"type":"text","text":"stable","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`)
 	parsed, err := ParseGatewayRequest(NewRequestBodyRef(body), PlatformAnthropic)
 	require.NoError(t, err)
 
@@ -120,6 +120,8 @@ func TestGatewayService_Forward_StreamMissingTerminalPreservesPartialUsage(t *te
 	require.Contains(t, err.Error(), "missing terminal event")
 	require.NotNil(t, result, "流中断但已观测到 usage 时必须返回部分结果用于计费")
 	require.True(t, result.Stream)
+	require.True(t, result.ExplicitCache, "显式缓存命中时创建量为零，仍以最终 wire body 标记显式模式")
+	require.True(t, hasEphemeralMessageOrSystemCacheControl(upstream.lastBody))
 	require.Equal(t, 11, result.Usage.InputTokens)
 	require.Equal(t, 7, result.Usage.CacheReadInputTokens)
 	require.Equal(t, 5, result.Usage.OutputTokens)
@@ -221,7 +223,7 @@ func TestGatewayService_Forward_PreOutputSSEOverloadedErrorUsesSemantic529(t *te
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
-	body := []byte(`{"model":"claude-3-5-sonnet-latest","stream":true,"messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"claude-3-5-sonnet-latest","stream":true,"system":[{"type":"text","text":"stable","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":"hello"}]}`)
 	parsed, err := ParseGatewayRequest(NewRequestBodyRef(body), PlatformAnthropic)
 	require.NoError(t, err)
 
@@ -268,7 +270,7 @@ func TestGatewayService_Forward_PostOutputSSEOverloadedErrorKeepsExistingStatus(
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
-	body := []byte(`{"model":"claude-3-5-sonnet-latest","stream":true,"messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"claude-3-5-sonnet-latest","stream":true,"system":[{"type":"text","text":"stable","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":"hello"}]}`)
 	parsed, err := ParseGatewayRequest(NewRequestBodyRef(body), PlatformAnthropic)
 	require.NoError(t, err)
 
@@ -292,13 +294,17 @@ func TestGatewayService_Forward_PostOutputSSEOverloadedErrorKeepsExistingStatus(
 
 	result, err := svc.Forward(context.Background(), c, newAnthropicOAuthAccountForPartialUsageTest(), parsed)
 	require.Error(t, err)
-	require.Nil(t, result)
+	require.NotNil(t, result, "已输出且已观测到 usage 时必须返回部分结果供 handler 入账")
+	require.Equal(t, 1, result.Usage.InputTokens)
+	require.True(t, result.ExplicitCache)
 
 	var failoverErr *UpstreamFailoverError
-	require.ErrorAs(t, err, &failoverErr)
-	require.Equal(t, http.StatusForbidden, failoverErr.StatusCode)
-	require.JSONEq(t, errorJSON, string(failoverErr.ResponseBody))
+	require.False(t, errors.As(err, &failoverErr), "已输出后禁止返回可重试错误")
+	var sseErr *sseStreamErrorEventError
+	require.ErrorAs(t, err, &sseErr)
+	require.JSONEq(t, errorJSON, sseErr.RawData)
 	require.Zero(t, repo.tempCalls)
+	require.Equal(t, http.StatusOK, rec.Code, "流已输出后响应状态不得被覆盖")
 	require.Contains(t, rec.Body.String(), "message_start")
 }
 

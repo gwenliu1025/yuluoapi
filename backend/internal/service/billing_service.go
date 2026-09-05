@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
+	"github.com/Wei-Shaw/sub2api/resources"
 )
 
 // APIKeyRateLimitCacheData holds rate limit usage data cached in Redis.
@@ -92,29 +93,34 @@ type BillingCache interface {
 }
 
 // ModelPricing 模型价格配置（per-token 价格）。BillingService 对外统一返回 CNY；
-// LiteLLM 与内置官方价卡在读取边界从 USD 换算。
+// 官方人民币价直接使用；只有美元目录价在读取边界换算。
 type ModelPricing struct {
-	InputPricePerToken                 float64  // 每 token 输入价格 (CNY)
-	InputPricePerTokenPriority         float64  // priority service tier 下每 token 输入价格 (CNY)
-	ImageInputPricePerToken            float64  // 图片输入 token 价格 (CNY)；为 0 时回退到 InputPricePerToken
-	OutputPricePerToken                float64  // 每 token 输出价格 (CNY)
-	OutputPricePerTokenPriority        float64  // priority service tier 下每 token 输出价格 (CNY)
-	CacheCreationPricePerToken         float64  // 缓存创建每 token 价格 (CNY)
-	CacheCreationPricePerTokenPriority float64  // priority service tier 下缓存创建每 token 价格 (CNY)
-	CacheCreationPriceExplicit         bool     // 是否由渠道/区间定价显式设定（为 true 时即使 == 0 也不回退）
-	CacheReadPricePerToken             float64  // 缓存读取每 token 价格 (CNY)
-	CacheReadPricePerTokenPriority     float64  // priority service tier 下缓存读取每 token 价格 (CNY)
-	FastMultiplier                     *float64 // 渠道显式 Fast/priority 倍率；nil 时沿用模型目录行为
-	FlexMultiplier                     *float64 // 渠道显式 Flex 倍率；nil 时沿用默认行为
-	CacheCreation5mPrice               float64  // 5 分钟缓存创建每 token 价格 (CNY)
-	CacheCreation1hPrice               float64  // 1 小时缓存创建每 token 价格 (CNY)
-	SupportsCacheBreakdown             bool     // 是否支持详细的缓存分类
-	LongContextInputThreshold          int      // 超过阈值后按整次会话提升输入价格
-	LongContextThresholdInclusive      bool     // 达到阈值即应用（xAI）；默认保持严格大于以兼容既有模型
-	LongContextInputMultiplier         float64  // 长上下文整次会话输入倍率
-	LongContextOutputMultiplier        float64  // 长上下文整次会话输出倍率
-	ImageOutputPricePerToken           float64  // 图片输出 token 价格 (CNY)
-	ImageOutputPriceExplicit           bool     // 是否由渠道定价显式设定（为 true 时即使 == 0 也不回退）
+	ExplicitCacheReadPricePerToken     *float64            // 官方显式缓存读取价，nil 表示不区分模式。
+	Currency                           string              // 源价卡币种；空值兼容历史 USD，读取边界统一为 CNY。
+	Intervals                          []PricingInterval   // 官方完整上下文阶梯，与渠道复用同一计费算法。
+	ThinkingOutputPricePerToken        *float64            // 官方思考模式输出价；nil 表示不区分模式。
+	TimePricing                        *ChannelTimePricing // 官方分时配置，显式渠道价不隐式继承。
+	InputPricePerToken                 float64             // 每 token 输入价格 (CNY)
+	InputPricePerTokenPriority         float64             // priority service tier 下每 token 输入价格 (CNY)
+	ImageInputPricePerToken            float64             // 图片输入 token 价格 (CNY)；为 0 时回退到 InputPricePerToken
+	OutputPricePerToken                float64             // 每 token 输出价格 (CNY)
+	OutputPricePerTokenPriority        float64             // priority service tier 下每 token 输出价格 (CNY)
+	CacheCreationPricePerToken         float64             // 缓存创建每 token 价格 (CNY)
+	CacheCreationPricePerTokenPriority float64             // priority service tier 下缓存创建每 token 价格 (CNY)
+	CacheCreationPriceExplicit         bool                // 是否由渠道/区间定价显式设定（为 true 时即使 == 0 也不回退）
+	CacheReadPricePerToken             float64             // 缓存读取每 token 价格 (CNY)
+	CacheReadPricePerTokenPriority     float64             // priority service tier 下缓存读取每 token 价格 (CNY)
+	FastMultiplier                     *float64            // 渠道显式 Fast/priority 倍率；nil 时沿用模型目录行为
+	FlexMultiplier                     *float64            // 渠道显式 Flex 倍率；nil 时沿用默认行为
+	CacheCreation5mPrice               float64             // 5 分钟缓存创建每 token 价格 (CNY)
+	CacheCreation1hPrice               float64             // 1 小时缓存创建每 token 价格 (CNY)
+	SupportsCacheBreakdown             bool                // 是否支持详细的缓存分类
+	LongContextInputThreshold          int                 // 超过阈值后按整次会话提升输入价格
+	LongContextThresholdInclusive      bool                // 达到阈值即应用（xAI）；默认保持严格大于以兼容既有模型
+	LongContextInputMultiplier         float64             // 长上下文整次会话输入倍率
+	LongContextOutputMultiplier        float64             // 长上下文整次会话输出倍率
+	ImageOutputPricePerToken           float64             // 图片输出 token 价格 (CNY)
+	ImageOutputPriceExplicit           bool                // 是否由渠道定价显式设定（为 true 时即使 == 0 也不回退）
 }
 
 func normalizeBillingServiceTier(serviceTier string) string {
@@ -177,6 +183,8 @@ func pricingWithPriorityMultiplier(base *ModelPricing, multiplier float64) *Mode
 
 // UsageTokens 使用的token数量
 type UsageTokens struct {
+	ExplicitCache         bool // 最终上游请求是否带显式缓存标记。
+	ThinkingEnabled       bool // 最终请求的思考模式，参与模式差异计费。
 	InputTokens           int
 	ImageInputTokens      int
 	OutputTokens          int
@@ -215,29 +223,50 @@ func applyCostBreakdownMultiplier(cost *CostBreakdown, multiplier float64) {
 	cost.ActualCost *= multiplier
 }
 
-func resolvedChannelTimeMultiplier(resolved *ResolvedPricing, at time.Time) float64 {
-	if resolved == nil || resolved.Source != PricingSourceChannel || resolved.channelPricing == nil {
-		return 1
+func resolvedTimePricingConfig(resolved *ResolvedPricing) *ChannelTimePricing {
+	if resolved == nil {
+		return nil
 	}
-	return resolved.channelPricing.TimePricing.MultiplierAt(at)
+	if resolved.Source == PricingSourceChannel && resolved.channelPricing != nil {
+		return resolved.channelPricing.TimePricing
+	}
+	if resolved.Source == PricingSourceLiteLLM && resolved.BasePricing != nil {
+		return resolved.BasePricing.TimePricing
+	}
+	return nil
+}
+
+func resolvedChannelTimeMultiplier(resolved *ResolvedPricing, at time.Time) float64 {
+	return resolvedTimePricingConfig(resolved).MultiplierAt(at)
 }
 
 // ErrModelPricingUnavailable indicates that none of the configured pricing
 // sources can price the requested model.
 var ErrModelPricingUnavailable = errors.New("pricing not found")
 
-// ---- DeepSeek 官方低谷价（$/token，2026-08-23 起生效）----
-// Source: https://api-docs.deepseek.com/quick_start/pricing
-// 高峰价 = 2× 低谷价；高峰时段 01:00–04:00 与 06:00–10:00 UTC（仅工作日），
-// 北京时间周六/周日全天低谷。时段判定见 deepseekPeakMultiplierAt。
-const (
-	deepseekFlashOffPeakInputPrice  = 2.2e-7  // $0.22 per MTok (cache miss)
-	deepseekFlashOffPeakOutputPrice = 6.6e-7  // $0.66 per MTok
-	deepseekFlashOffPeakCacheRead   = 7e-9    // $0.007 per MTok (cache hit)
-	deepseekProOffPeakInputPrice    = 6.6e-7  // $0.66 per MTok (cache miss)
-	deepseekProOffPeakOutputPrice   = 1.98e-6 // $1.98 per MTok
-	deepseekProOffPeakCacheRead     = 2.2e-8  // $0.022 per MTok (cache hit)
-)
+// 国模人民币价格仅由发行目录持有，回退价也从同一份数据构造。
+var builtinCNYPrices = sync.OnceValue(func() map[string]*ModelPricing {
+	catalog, err := (&PricingService{}).parsePricingData(resources.ModelPricing)
+	if err != nil {
+		panic(fmt.Sprintf("invalid bundled pricing data: %v", err))
+	}
+	out := make(map[string]*ModelPricing)
+	for name, entry := range catalog {
+		if entry.Currency == BillingCurrency {
+			out[name] = modelPricingFromCatalog(entry)
+		}
+	}
+	return out
+})
+
+// 官方时段使用现有渠道时间引擎；显式渠道配置不会隐式叠加该时段。
+var deepseekOfficialTimePricing = &ChannelTimePricing{
+	Timezone: "Asia/Shanghai", WeekdaysOnly: true,
+	Periods: []ChannelTimePricingPeriod{
+		{StartTime: "09:00", EndTime: "12:00", Multiplier: 2},
+		{StartTime: "14:00", EndTime: "18:00", Multiplier: 2},
+	},
+}
 
 // isDeepSeekModel 判断模型名是否为 DeepSeek 模型（大小写不敏感）。
 // 任意 deepseek- 前缀均视为 DeepSeek 模型：官方模型（v4-flash / v4-pro /
@@ -247,23 +276,6 @@ const (
 // 运营者据此更新价卡。
 func isDeepSeekModel(model string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "deepseek-")
-}
-
-// deepseekPeakMultiplierAt 返回指定时刻的 DeepSeek 官方峰谷定价因子。
-// 官方口径（2026-08-23 起生效）：高峰价 = 2× 低谷价；高峰时段为
-// 01:00–04:00 与 06:00–10:00 UTC（半开区间），仅工作日；
-// 周末（北京时间周六/周日）全天低谷。北京时间用固定 +8 偏移（无夏令时）。
-func deepseekPeakMultiplierAt(now time.Time) float64 {
-	beijing := now.In(time.FixedZone("Asia/Shanghai", 8*3600))
-	switch beijing.Weekday() {
-	case time.Saturday, time.Sunday:
-		return 1.0
-	}
-	switch h := now.UTC().Hour(); {
-	case h >= 1 && h < 4, h >= 6 && h < 10:
-		return 2.0
-	}
-	return 1.0
 }
 
 // BillingService 计费服务
@@ -293,7 +305,7 @@ func NewBillingService(cfg *config.Config, pricingService *PricingService) *Bill
 }
 
 // initFallbackPricing 初始化硬编码回退价格（当动态价格不可用时使用）
-// 价格单位：USD per token（与LiteLLM格式一致）
+// 历史卡默认为 USD；国模人民币卡从发行目录读取并显式标记币种。
 func (s *BillingService) initFallbackPricing() {
 	// Claude 4.5 Opus
 	s.fallbackPrices["claude-opus-4.5"] = &ModelPricing{
@@ -505,56 +517,7 @@ func (s *BillingService) initFallbackPricing() {
 	// 覆盖逻辑见同文件 getFallbackPricing()
 	// ============================================================
 
-	// ---- DeepSeek 系列 ----
-	// Source: https://api-docs.deepseek.com/quick_start/pricing
-	// 官方口径（2026-08-23 起生效）：现行模型为 deepseek-v4-flash /
-	// deepseek-v4-pro / deepseek-v4-flash-vision-exp；deepseek-chat /
-	// deepseek-reasoner 已停止服务，其余 deepseek-*（含未知型号）统一按
-	// flash 价兜底（见 getFallbackPricing），避免计费中断。
-	// 以下均为官方低谷价；高峰价 = 2× 低谷价（高峰时段 01:00–04:00
-	// 与 06:00–10:00 UTC，仅工作日；北京时间周六/周日全天低谷），见 deepseekPeakMultiplierAt。
-	s.fallbackPrices["deepseek-v4-pro"] = &ModelPricing{
-		InputPricePerToken:     deepseekProOffPeakInputPrice,  // $0.66 per MTok (cache miss, off-peak)
-		OutputPricePerToken:    deepseekProOffPeakOutputPrice, // $1.98 per MTok
-		CacheReadPricePerToken: deepseekProOffPeakCacheRead,   // $0.022 per MTok (cache hit)
-		SupportsCacheBreakdown: false,
-	}
-	s.fallbackPrices["deepseek-v4-flash"] = &ModelPricing{
-		InputPricePerToken:     deepseekFlashOffPeakInputPrice,  // $0.22 per MTok (cache miss, off-peak)
-		OutputPricePerToken:    deepseekFlashOffPeakOutputPrice, // $0.66 per MTok
-		CacheReadPricePerToken: deepseekFlashOffPeakCacheRead,   // $0.007 per MTok (cache hit)
-		SupportsCacheBreakdown: false,
-	}
-	s.fallbackPrices["deepseek-v4-flash-vision-exp"] = &ModelPricing{
-		InputPricePerToken:     deepseekFlashOffPeakInputPrice,
-		OutputPricePerToken:    deepseekFlashOffPeakOutputPrice,
-		CacheReadPricePerToken: deepseekFlashOffPeakCacheRead,
-		SupportsCacheBreakdown: false,
-	}
-
-	// ---- 智谱 GLM（Z.AI）----
-	// Source: https://docs.z.ai/guides/overview/pricing (USD per 1M tokens)
-	// 注意：CacheReadPricePerToken 即"缓存命中"价格，CacheCreationPricePerToken 留空（智谱未公开写入价，按 0 处理）。
-	// GLM-4.6 与 GLM-4.5 在 z.ai 国际版上定价一致；GLM-4.5 国内按 ¥0.8/¥2，汇率换算后约 $0.112/$0.28，与国际版 $0.6/$2.2 不同，本分支采用国际版 USD 口径与现有 Claude/GPT 一致。
-	// GLM-5.2 与 GLM-5.1 在 z.ai 上同价。
-	s.fallbackPrices["glm-5.2"] = &ModelPricing{
-		InputPricePerToken:     1.4e-6, // $1.40 per MTok
-		OutputPricePerToken:    4.4e-6, // $4.40 per MTok
-		CacheReadPricePerToken: 0.26e-6,
-		SupportsCacheBreakdown: false,
-	}
-	s.fallbackPrices["glm-5.1"] = &ModelPricing{
-		InputPricePerToken:     1.4e-6, // $1.40 per MTok
-		OutputPricePerToken:    4.4e-6, // $4.40 per MTok
-		CacheReadPricePerToken: 0.26e-6,
-		SupportsCacheBreakdown: false,
-	}
-	s.fallbackPrices["glm-5"] = &ModelPricing{
-		InputPricePerToken:     1e-6, // $1.00 per MTok
-		OutputPricePerToken:    3.2e-6,
-		CacheReadPricePerToken: 0.2e-6,
-		SupportsCacheBreakdown: false,
-	}
+	// 其余未纳入人民币发行目录的历史 GLM 价卡保持原口径。
 	s.fallbackPrices["glm-5-turbo"] = &ModelPricing{
 		InputPricePerToken:     1.2e-6,
 		OutputPricePerToken:    4e-6,
@@ -620,37 +583,11 @@ func (s *BillingService) initFallbackPricing() {
 		SupportsCacheBreakdown: false,
 	}
 
-	// ---- 月之暗面 Kimi（K 系列）----
-	// Source: https://platform.moonshot.cn/docs/pricing/overview (元/百万 tokens 口径)
-	//       交叉验证：https://www.tmtpost.com/7961404.html (USD 口径)
-	// Moonshot V1 (¥2/¥5/¥10 多 tier) 公开页未直接标注 USD 价，本分支不覆盖，避免误计价。
-	// K2-0905 / K2-0711 官方页面未保留定价，不覆盖。
-	// Kimi K3 国际站 USD 价目：https://platform.kimi.ai/docs/pricing/chat-k3.md
-	// Kimi Code bare aliases（k3 / k3-256k）官方无按 token 价目；复用 API Platform
-	// kimi-k3 档位作代理计费 fallback（同 kimi-for-coding 对 K2.6 的处理口径）。
-	s.fallbackPrices["kimi-k3"] = &ModelPricing{
-		InputPricePerToken:     3e-6,    // $3.00 per MTok (cache miss)
-		OutputPricePerToken:    15e-6,   // $15.00 per MTok
-		CacheReadPricePerToken: 0.30e-6, // $0.30 per MTok (cache hit)
-		SupportsCacheBreakdown: false,
-	}
-	s.fallbackPrices["kimi-k2.6"] = &ModelPricing{
-		InputPricePerToken:     0.95e-6, // $0.95 per MTok (cache miss)
-		OutputPricePerToken:    4e-6,    // $4.00 per MTok
-		CacheReadPricePerToken: 0.15e-6, // $0.15 per MTok (cache hit, ¥1.10)
-		SupportsCacheBreakdown: false,
-	}
-	// kimi-for-coding 走 Kimi Coding endpoint，按当前 K2.6 coding 档位兜底计费。
+	// 未纳入当前人民币目录的历史 Kimi 标识保留原回退口径。
 	s.fallbackPrices["kimi-for-coding"] = &ModelPricing{
 		InputPricePerToken:     0.95e-6,
 		OutputPricePerToken:    4e-6,
 		CacheReadPricePerToken: 0.15e-6,
-		SupportsCacheBreakdown: false,
-	}
-	s.fallbackPrices["kimi-k2.5"] = &ModelPricing{
-		InputPricePerToken:     0.60e-6, // $0.60 per MTok
-		OutputPricePerToken:    3e-6,    // $3.00 per MTok
-		CacheReadPricePerToken: 0.098e-6,
 		SupportsCacheBreakdown: false,
 	}
 	s.fallbackPrices["kimi-k2-thinking"] = &ModelPricing{
@@ -797,11 +734,20 @@ func (s *BillingService) initFallbackPricing() {
 		LongContextInputMultiplier:    2,
 		LongContextOutputMultiplier:   2,
 	}
+	for name, pricing := range builtinCNYPrices() {
+		cloned := *pricing
+		cloned.Intervals = append([]PricingInterval(nil), pricing.Intervals...)
+		s.fallbackPrices[name] = &cloned
+	}
 }
 
 // getFallbackPricing 根据模型系列获取回退价格
 func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	modelLower := strings.ToLower(model)
+	// 先精确识别当前人民币目录，历史系列猜测不覆盖已发布的具体型号。
+	if native := s.fallbackPrices[strings.TrimSpace(modelLower)]; native != nil && native.Currency == BillingCurrency {
+		return native
+	}
 
 	// 按模型系列匹配
 	if strings.Contains(modelLower, "fable-5-1") || strings.Contains(modelLower, "fable-5.1") ||
@@ -1094,10 +1040,41 @@ func (s *BillingService) HasIdentifiedTokenPricing(model string) bool {
 	return ok && pricing != nil
 }
 
+// modelPricingFromCatalog 只负责字段/币种适配，不维护第二份模型价格。
+func modelPricingFromCatalog(litellmPricing *LiteLLMModelPricing) *ModelPricing {
+	price5m := litellmPricing.CacheCreationInputTokenCost
+	price1h := litellmPricing.CacheCreationInputTokenCostAbove1hr
+	enableBreakdown := price1h > 0 && price1h > price5m
+	return pricingUSDToCNY(&ModelPricing{
+		Currency:                           litellmPricing.Currency,
+		Intervals:                          litellmPricing.PricingIntervals,
+		ThinkingOutputPricePerToken:        litellmPricing.ThinkingOutputCostPerToken,
+		ExplicitCacheReadPricePerToken:     litellmPricing.ExplicitCacheReadCostPerToken,
+		InputPricePerToken:                 litellmPricing.InputCostPerToken,
+		InputPricePerTokenPriority:         litellmPricing.InputCostPerTokenPriority,
+		OutputPricePerToken:                litellmPricing.OutputCostPerToken,
+		OutputPricePerTokenPriority:        litellmPricing.OutputCostPerTokenPriority,
+		CacheCreationPricePerToken:         litellmPricing.CacheCreationInputTokenCost,
+		CacheCreationPricePerTokenPriority: litellmPricing.CacheCreationInputTokenCostPriority,
+		CacheReadPricePerToken:             litellmPricing.CacheReadInputTokenCost,
+		CacheReadPricePerTokenPriority:     litellmPricing.CacheReadInputTokenCostPriority,
+		CacheCreation5mPrice:               price5m,
+		CacheCreation1hPrice:               price1h,
+		SupportsCacheBreakdown:             enableBreakdown,
+		LongContextInputThreshold:          litellmPricing.LongContextInputTokenThreshold,
+		// xAI 的长上下文阈值语义为"达到即进高档"（LiteLLM 同口径），其余提供商为严格大于。
+		LongContextThresholdInclusive: strings.EqualFold(litellmPricing.LiteLLMProvider, "xai"),
+		LongContextInputMultiplier:    litellmPricing.LongContextInputCostMultiplier,
+		LongContextOutputMultiplier:   litellmPricing.LongContextOutputCostMultiplier,
+		ImageInputPricePerToken:       litellmPricing.InputCostPerImageToken,
+		ImageOutputPricePerToken:      litellmPricing.OutputCostPerImageToken,
+	})
+}
+
 // GetModelPricing 获取模型价格配置
 func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	// 标准化模型名称（转小写）
-	model = strings.ToLower(model)
+	model = strings.ToLower(strings.TrimSpace(model))
 
 	// 1. 优先从动态价格服务获取
 	if s.pricingService != nil {
@@ -1110,33 +1087,12 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 		if litellmPricing != nil && litellmPricing.TokenPricingAbsent {
 			litellmPricing = nil
 		}
+		if native := s.fallbackPrices[model]; native != nil && native.Currency == BillingCurrency && litellmPricing != nil && litellmPricing.Currency != BillingCurrency {
+			// 本期国内目录不被国际美元镜像或旧磁盘缓存替换。
+			litellmPricing = nil
+		}
 		if litellmPricing != nil {
-			// 启用 5m/1h 分类计费的条件：
-			// 1. 存在 1h 价格
-			// 2. 1h 价格 > 5m 价格（防止 LiteLLM 数据错误导致少收费）
-			price5m := litellmPricing.CacheCreationInputTokenCost
-			price1h := litellmPricing.CacheCreationInputTokenCostAbove1hr
-			enableBreakdown := price1h > 0 && price1h > price5m
-			return pricingUSDToCNY(s.applyModelSpecificPricingPolicy(model, &ModelPricing{
-				InputPricePerToken:                 litellmPricing.InputCostPerToken,
-				InputPricePerTokenPriority:         litellmPricing.InputCostPerTokenPriority,
-				OutputPricePerToken:                litellmPricing.OutputCostPerToken,
-				OutputPricePerTokenPriority:        litellmPricing.OutputCostPerTokenPriority,
-				CacheCreationPricePerToken:         litellmPricing.CacheCreationInputTokenCost,
-				CacheCreationPricePerTokenPriority: litellmPricing.CacheCreationInputTokenCostPriority,
-				CacheReadPricePerToken:             litellmPricing.CacheReadInputTokenCost,
-				CacheReadPricePerTokenPriority:     litellmPricing.CacheReadInputTokenCostPriority,
-				CacheCreation5mPrice:               price5m,
-				CacheCreation1hPrice:               price1h,
-				SupportsCacheBreakdown:             enableBreakdown,
-				LongContextInputThreshold:          litellmPricing.LongContextInputTokenThreshold,
-				// xAI 的长上下文阈值语义为"达到即进高档"（LiteLLM 同口径），其余提供商为严格大于。
-				LongContextThresholdInclusive: strings.EqualFold(litellmPricing.LiteLLMProvider, "xai"),
-				LongContextInputMultiplier:    litellmPricing.LongContextInputCostMultiplier,
-				LongContextOutputMultiplier:   litellmPricing.LongContextOutputCostMultiplier,
-				ImageInputPricePerToken:       litellmPricing.InputCostPerImageToken,
-				ImageOutputPricePerToken:      litellmPricing.OutputCostPerImageToken,
-			})), nil
+			return s.applyModelSpecificPricingPolicy(model, modelPricingFromCatalog(litellmPricing)), nil
 		}
 	}
 
@@ -1148,7 +1104,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 		if _, seen := s.fallbackWarnSeen.LoadOrStore(model, struct{}{}); !seen {
 			log.Printf("[Billing] Using fallback pricing for model: %s", model)
 		}
-		return pricingUSDToCNY(s.applyModelSpecificPricingPolicy(model, fallback)), nil
+		return s.applyModelSpecificPricingPolicy(model, pricingUSDToCNY(fallback)), nil
 	}
 
 	return nil, fmt.Errorf("%w for model: %s", ErrModelPricingUnavailable, model)
@@ -1245,25 +1201,18 @@ type CostInput struct {
 	Resolver                  *ModelPricingResolver // 定价解析器
 	Resolved                  *ResolvedPricing      // 可选：预解析的定价结果（避免重复 Resolve 调用）
 	LongContextBillingEnabled *bool
+	skipTimePricing           bool // 价格表探针查询标准时段单价，不依赖查询时刻。
 }
 
 // CalculateCostUnified 统一计费入口，支持三种计费模式。
 // 使用 ModelPricingResolver 解析定价，然后根据 BillingMode 分发计算。
 func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, error) {
+	writeBillingMode := input.Resolver != nil // 保留无解析器旧入口的返回字段契约。
 	if input.Resolver == nil {
-		// 无 Resolver，回退到旧路径
-		applyLongContextBilling := true
-		if input.LongContextBillingEnabled != nil {
-			applyLongContextBilling = *input.LongContextBillingEnabled
-		}
-		return s.calculateCostInternalWithPolicy(
-			input.Model,
-			input.Tokens,
-			input.RateMultiplier,
-			input.ServiceTier,
-			nil,
-			applyLongContextBilling,
-		)
+		input.Resolver = NewModelPricingResolver(nil, s)
+	}
+	if input.PricingAt.IsZero() && !input.skipTimePricing {
+		input.PricingAt = timezone.Now()
 	}
 
 	// 优先使用预解析结果，避免重复 Resolve 调用
@@ -1274,6 +1223,13 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 			GroupID: input.GroupID,
 			Group:   input.Group,
 		})
+	}
+
+	if input.Group == nil && input.LongContextBillingEnabled != nil {
+		// 无分组的旧入口仍尊重显式关闭阶梯，不修改调用方共享的预解析结果。
+		cloned := *resolved
+		cloned.longContextPricingEnabled = *input.LongContextBillingEnabled
+		resolved = &cloned
 	}
 
 	// 保存时强制 > 0；若仍有负数泄漏（缓存/迁移残留），按 0 处理避免按 1x 误扣。
@@ -1289,7 +1245,7 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 	default: // BillingModeToken
 		breakdown, err = s.calculateTokenCost(resolved, input)
 	}
-	if err == nil && breakdown != nil {
+	if err == nil && breakdown != nil && writeBillingMode {
 		breakdown.BillingMode = string(resolved.Mode)
 		if breakdown.BillingMode == "" {
 			breakdown.BillingMode = string(BillingModeToken)
@@ -1319,34 +1275,19 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 		return nil, fmt.Errorf("no pricing available for model: %s: %w", input.Model, ErrModelPricingUnavailable)
 	}
 
-	// 默认价卡（Source=LiteLLM）应用 DeepSeek 官方价强制覆盖（幂等，GetModelPricing
-	// 内部已强制过）；分组/渠道自定义定价保留运营者配置，不强制覆盖官方价。
-	pricing = s.applyModelSpecificPricingPolicyEx(input.Model, pricing, resolved.Source == PricingSourceLiteLLM)
-
-	// DeepSeek 模型默认价卡按官方峰谷口径调整：高峰时段（01:00–04:00 与
-	// 06:00–10:00 UTC，仅工作日；北京时间周末全天低谷）按 2× 低谷价计费。
-	// 仅作用于默认价卡（Source=LiteLLM，无分组/渠道自定义定价）——分组/渠道
-	// 自定义定价保持运营者语义，不叠加。PricingAt 为零值时回退当前时刻。
-	// 先克隆再乘，避免污染共享 fallbackPrices 指针。
-	if resolved.Source == PricingSourceLiteLLM && isDeepSeekModel(input.Model) {
-		pricingAt := input.PricingAt
-		if pricingAt.IsZero() {
-			pricingAt = timezone.Now()
-		}
-		if mult := deepseekPeakMultiplierAt(pricingAt); mult > 1 {
-			cloned := *pricing
-			cloned.InputPricePerToken *= mult
-			cloned.OutputPricePerToken *= mult
-			cloned.CacheReadPricePerToken *= mult
-			pricing = &cloned
-		}
+	// 价格已在 GetModelPricing 归一为人民币；此处只应用不改币种的协议策略。
+	pricing = s.applyModelSpecificPricingPolicyEx(input.Model, pricing, false)
+	if input.Tokens.ThinkingEnabled || input.Tokens.ExplicitCache {
+		pricing = s.requestModePricingForContext(input.Model, pricing, pricingContext, input.Tokens.ThinkingEnabled, input.Tokens.ExplicitCache)
 	}
 
 	// 官方长上下文阶梯仅在无区间定价时应用（区间定价已包含上下文分层）。
 	applyLongCtx := len(resolved.Intervals) == 0 && contextTierPricingEnabled
 
 	breakdown := s.computeTokenBreakdown(pricing, input.Tokens, input.RateMultiplier, input.ServiceTier, applyLongCtx)
-	applyCostBreakdownMultiplier(breakdown, resolvedChannelTimeMultiplier(resolved, input.PricingAt))
+	if !input.skipTimePricing {
+		applyCostBreakdownMultiplier(breakdown, resolvedChannelTimeMultiplier(resolved, input.PricingAt))
+	}
 	return breakdown, nil
 }
 
@@ -1572,18 +1513,16 @@ func (s *BillingService) calculateCostInternalWithPolicy(
 	channelPricing *ChannelModelPricing,
 	longContextBillingEnabled bool,
 ) (*CostBreakdown, error) {
-	var pricing *ModelPricing
-	var err error
+	resolver := NewModelPricingResolver(nil, s)
+	resolved := resolver.Resolve(context.Background(), PricingInput{Model: model})
 	if channelPricing != nil {
-		pricing, err = s.GetModelPricingWithChannel(model, channelPricing)
-	} else {
-		pricing, err = s.GetModelPricing(model)
+		resolved = resolver.resolveConfiguredPricing(channelPricing, model, PricingSourceChannel)
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	return s.computeTokenBreakdown(pricing, tokens, rateMultiplier, serviceTier, longContextBillingEnabled), nil
+	resolved.longContextPricingEnabled = longContextBillingEnabled
+	return s.CalculateCostUnified(CostInput{
+		Ctx: context.Background(), Model: model, Tokens: tokens, RateMultiplier: rateMultiplier,
+		ServiceTier: serviceTier, Resolver: resolver, Resolved: resolved,
+	})
 }
 
 // applyModelSpecificPricingPolicy 对目录数据做模型特定修正：DeepSeek 官方价
@@ -1605,27 +1544,14 @@ func (s *BillingService) applyModelSpecificPricingPolicyEx(model string, pricing
 	if pricing == nil {
 		return nil
 	}
-	// DeepSeek 模型：无论 JSON/远端价格表给什么价，一律强制官方低谷价
-	// （2026-08-23 起生效）。这是覆盖远端旧价的关键——远端仓库不可改，生产会先
-	// 拉到旧价，必须在此兜底修正；克隆后再覆盖，避免污染共享 fallbackPrices 指针。
-	// 档位判定：含 "deepseek-v4-pro" 的版本化名称（如 deepseek-v4-pro-0813）归 pro 档，
-	// 其余 deepseek-*（含已停服的 chat/reasoner 与未知型号）统一归 flash 档。
-	// 高峰时段倍率不在本函数处理，由 calculateTokenCost 按 deepseekPeakMultiplierAt
-	// 对默认价卡另行叠加（分组/渠道自定义定价不叠加）。
+	// 旧美元镜像的 DeepSeek 条目回归同一份官方人民币目录，
+	// 版本化名称沿用既有归档匹配；只给默认价卡附加官方时段。
 	if forceDeepSeekRates && isDeepSeekModel(model) {
-		cloned := *pricing
-		if strings.Contains(strings.ToLower(strings.TrimSpace(model)), "deepseek-v4-pro") {
-			cloned.InputPricePerToken = deepseekProOffPeakInputPrice
-			cloned.OutputPricePerToken = deepseekProOffPeakOutputPrice
-			cloned.CacheReadPricePerToken = deepseekProOffPeakCacheRead
-		} else {
-			// deepseek-v4-flash / deepseek-v4-flash-vision-exp 与其余 deepseek-* 共用 flash 价。
-			cloned.InputPricePerToken = deepseekFlashOffPeakInputPrice
-			cloned.OutputPricePerToken = deepseekFlashOffPeakOutputPrice
-			cloned.CacheReadPricePerToken = deepseekFlashOffPeakCacheRead
-		}
+		cloned := *s.getFallbackPricing(model)
+		cloned.TimePricing = deepseekOfficialTimePricing
 		return &cloned
 	}
+
 	normalized := normalizeKnownOpenAICodexModel(model)
 	isGPT56 := isOpenAIGPT56Model(normalized)
 	needsCacheCreationPolicy := isGPT56 && !pricing.CacheCreationPriceExplicit && (pricing.CacheCreationPricePerToken <= 0 ||

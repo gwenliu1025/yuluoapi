@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"log/slog"
-
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -13,10 +11,10 @@ import (
 // ModelPlazaHandler 处理「模型广场」查询。
 //
 // 广场路由挂 OptionalJWT 中间件：匿名可访问（除非 require_auth 开启），带 token 则
-// 识别用户。可见性规则（橱窗语义，与「可用渠道」的可绑定语义不同）：
+// 识别用户。可见性规则：
 //   - 匿名：仅非专属分组（订阅型照常展示）；
-//   - 登录：非专属分组 + user_allowed_groups 授权的专属分组（不检查订阅有效性）；
-//     若该用户开启了公开分组限制，则公开分组同样需要落在授权集合内。
+//   - 登录：复用 API Key 的实际可绑定分组，公开标准组与获授专属组并存，
+//     订阅组必须有有效订阅。
 type ModelPlazaHandler struct {
 	plazaService   *service.ModelPlazaService
 	apiKeyService  *service.APIKeyService
@@ -38,11 +36,13 @@ func NewModelPlazaHandler(
 
 // modelPlazaOfficialPricing 官方参考价（CNY per token，与计费目录同源）。
 type modelPlazaOfficialPricing struct {
-	InputPrice        *float64 `json:"input_price"`
-	OutputPrice       *float64 `json:"output_price"`
-	CacheWritePrice   *float64 `json:"cache_write_price"`
-	CacheWrite1hPrice *float64 `json:"cache_write_1h_price,omitempty"`
-	CacheReadPrice    *float64 `json:"cache_read_price"`
+	ExplicitCacheReadPrice *float64               `json:"explicit_cache_read_price,omitempty"`
+	TimePricing            *modelPlazaTimePricing `json:"time_pricing,omitempty"`
+	InputPrice             *float64               `json:"input_price"`
+	OutputPrice            *float64               `json:"output_price"`
+	CacheWritePrice        *float64               `json:"cache_write_price"`
+	CacheWrite1hPrice      *float64               `json:"cache_write_1h_price,omitempty"`
+	CacheReadPrice         *float64               `json:"cache_read_price"`
 	// Intervals 官方长上下文阶梯，仅多档模型给出。
 	Intervals []userPricingIntervalDTO `json:"intervals,omitempty"`
 }
@@ -64,10 +64,12 @@ type modelPlazaTimePricing struct {
 
 // modelPlazaModel 广场模型条目：实收口径展示定价（白名单形态）+ 官方参考价。
 type modelPlazaModel struct {
-	Name            string                     `json:"name"`
-	Platform        string                     `json:"platform"`
-	Pricing         *userSupportedModelPricing `json:"pricing"`
-	OfficialPricing *modelPlazaOfficialPricing `json:"official_pricing"`
+	ThinkingPricing         *userSupportedModelPricing `json:"thinking_pricing,omitempty"`
+	OfficialThinkingPricing *modelPlazaOfficialPricing `json:"official_thinking_pricing,omitempty"`
+	Name                    string                     `json:"name"`
+	Platform                string                     `json:"platform"`
+	Pricing                 *userSupportedModelPricing `json:"pricing"`
+	OfficialPricing         *modelPlazaOfficialPricing `json:"official_pricing"`
 	// LongContextBasis 多档时的计价基准："whole_request"（整单按档）| "marginal"（仅超出部分）。
 	LongContextBasis string `json:"long_context_basis,omitempty"`
 	// TimePricing 分时倍率时段，落在时段内的请求整单乘倍率；无分时省略。
@@ -130,24 +132,26 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 
 	// allowedGroups == nil 表示匿名；登录用户恒为非 nil（可能为空集合）。
 	var allowedGroups map[int64]struct{}
-	var restrictPublicGroups bool
 	var userRates map[int64]float64
 	if authed {
-		allowedGroups, restrictPublicGroups, err = h.apiKeyService.GetUserGroupVisibility(c.Request.Context(), subject.UserID)
+		availableGroups, groupErr := h.apiKeyService.GetAvailableGroups(c.Request.Context(), subject.UserID)
+		if groupErr != nil {
+			response.ErrorFrom(c, groupErr)
+			return
+		}
+		allowedGroups = make(map[int64]struct{}, len(availableGroups))
+		for i := range availableGroups {
+			allowedGroups[availableGroups[i].ID] = struct{}{}
+		}
+
+		userRates, err = h.apiKeyService.GetUserGroupRates(c.Request.Context(), subject.UserID)
 		if err != nil {
-			// 可见性数据拿不到时不能静默降级成匿名视图（会错漏专属分组），直接报错。
 			response.ErrorFrom(c, err)
 			return
 		}
-		userRates, err = h.apiKeyService.GetUserGroupRates(c.Request.Context(), subject.UserID)
-		if err != nil {
-			// 专属倍率仅是展示增强，失败降级为分组默认倍率。
-			slog.Warn("model_plaza_user_rates_failed", "error", err, "user_id", subject.UserID)
-			userRates = nil
-		}
 	}
 
-	visible := filterPlazaVisibleGroups(groups, allowedGroups, restrictPublicGroups)
+	visible := filterPlazaVisibleGroups(groups, allowedGroups)
 
 	out := make([]modelPlazaGroup, 0, len(visible))
 	for i := range visible {
@@ -160,23 +164,20 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 }
 
 // filterPlazaVisibleGroups 按登录态裁剪分组可见性。
-// allowedGroups == nil 表示匿名（仅非专属）；非 nil 表示登录（非专属 + 授权专属）。
-// restrictPublicGroups 为 true 时，公开分组也必须落在 allowedGroups 内，否则用户会
-// 在广场看到自己实际绑定不了的分组。
+// allowedGroups == nil 表示匿名（仅非专属）；非 nil 表示登录并只展示 API Key
+// 服务返回的实际可绑定分组。
 func filterPlazaVisibleGroups(
 	groups []service.PlazaGroup,
 	allowedGroups map[int64]struct{},
-	restrictPublicGroups bool,
 ) []service.PlazaGroup {
 	visible := make([]service.PlazaGroup, 0, len(groups))
 	for _, g := range groups {
-		if g.IsExclusive || (restrictPublicGroups && allowedGroups != nil) {
-			if allowedGroups == nil {
+		if allowedGroups == nil {
+			if g.IsExclusive {
 				continue
 			}
-			if _, ok := allowedGroups[g.ID]; !ok {
-				continue
-			}
+		} else if _, ok := allowedGroups[g.ID]; !ok {
+			continue
 		}
 		visible = append(visible, g)
 	}
@@ -189,12 +190,14 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 	for i := range g.Models {
 		m := &g.Models[i]
 		models = append(models, modelPlazaModel{
-			Name:             m.Name,
-			Platform:         m.Platform,
-			Pricing:          toUserPricing(m.Pricing),
-			OfficialPricing:  toModelPlazaOfficialPricing(m.OfficialPricing),
-			LongContextBasis: string(m.LongContextBasis),
-			TimePricing:      toModelPlazaTimePricing(m.TimePricing),
+			Name:                    m.Name,
+			Platform:                m.Platform,
+			Pricing:                 toUserPricing(m.Pricing),
+			ThinkingPricing:         toUserPricing(m.ThinkingPricing),
+			OfficialThinkingPricing: toModelPlazaOfficialPricing(m.OfficialThinkingPricing),
+			OfficialPricing:         toModelPlazaOfficialPricing(m.OfficialPricing),
+			LongContextBasis:        string(m.LongContextBasis),
+			TimePricing:             toModelPlazaTimePricing(m.TimePricing),
 		})
 	}
 	dto := modelPlazaGroup{
@@ -242,11 +245,13 @@ func toModelPlazaOfficialPricing(p *service.PlazaOfficialPricing) *modelPlazaOff
 		return nil
 	}
 	return &modelPlazaOfficialPricing{
-		InputPrice:        p.InputPrice,
-		OutputPrice:       p.OutputPrice,
-		CacheWritePrice:   p.CacheWritePrice,
-		CacheWrite1hPrice: p.CacheWrite1hPrice,
-		CacheReadPrice:    p.CacheReadPrice,
-		Intervals:         toUserPricingIntervals(p.Intervals),
+		TimePricing:            toModelPlazaTimePricing(p.TimePricing),
+		InputPrice:             p.InputPrice,
+		OutputPrice:            p.OutputPrice,
+		CacheWritePrice:        p.CacheWritePrice,
+		CacheWrite1hPrice:      p.CacheWrite1hPrice,
+		CacheReadPrice:         p.CacheReadPrice,
+		ExplicitCacheReadPrice: p.ExplicitCacheReadPrice,
+		Intervals:              toUserPricingIntervals(p.Intervals),
 	}
 }

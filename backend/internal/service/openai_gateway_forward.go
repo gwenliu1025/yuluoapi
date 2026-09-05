@@ -1155,6 +1155,31 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		if reqStream {
 			streamResult, err := s.handleStreamingResponseWithReasoning(ctx, resp, c, account, startTime, originalModel, upstreamModel, reasoningEffortValue)
 			if err != nil {
+				if streamResult != nil && c.Writer.Written() {
+					partialUsage := streamResult.usage
+					if partialUsage == nil {
+						partialUsage = &OpenAIUsage{}
+					}
+					return &OpenAIForwardResult{
+						RequestID:                     resp.Header.Get("x-request-id"),
+						ResponseID:                    strings.TrimSpace(streamResult.responseID),
+						Usage:                         *partialUsage,
+						Model:                         originalModel,
+						BillingModel:                  billingModel,
+						UpstreamModel:                 upstreamModel,
+						UpstreamResponseModel:         observedUpstreamResponseModel(c),
+						UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+						UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
+						ServiceTier:                   resolvedOpenAIUpstreamServiceTier(c, serviceTier),
+						ReasoningEffort: ApplyThinkingEnabledFallback(
+							extractOpenAIReasoningEffortFromBody(body, upstreamModel, billingModel, originalModel), body, upstreamModel,
+						),
+						ExplicitCache: isQwenUpstreamModel(upstreamModel) && hasEphemeralResponsesInputCacheControl(body),
+						Stream:        true,
+						Duration:      time.Since(startTime),
+						FirstTokenMs:  streamResult.firstTokenMs,
+					}, err
+				}
 				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
 					if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
 						c, account, requestedModel, body, http.StatusBadRequest, signal.message, signal.payload, compactModelFallbackRetried,
@@ -1247,11 +1272,16 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
 			UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
 			ServiceTier:                   resolvedOpenAIUpstreamServiceTier(c, serviceTier),
-			ReasoningEffort:               reasoningEffort,
-			Stream:                        reqStream,
-			OpenAIWSMode:                  false,
-			Duration:                      time.Since(startTime),
-			FirstTokenMs:                  firstTokenMs,
+			ReasoningEffort: ApplyThinkingEnabledFallback(
+				extractOpenAIReasoningEffortFromBody(body, upstreamModel, billingModel, originalModel),
+				body,
+				upstreamModel,
+			),
+			ExplicitCache: isQwenUpstreamModel(upstreamModel) && hasEphemeralResponsesInputCacheControl(body),
+			Stream:        reqStream,
+			OpenAIWSMode:  false,
+			Duration:      time.Since(startTime),
+			FirstTokenMs:  firstTokenMs,
 		}
 		if imageCount > 0 {
 			forwardResult.ImageCount = imageCount

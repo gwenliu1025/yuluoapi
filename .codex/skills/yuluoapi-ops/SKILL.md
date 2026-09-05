@@ -32,6 +32,21 @@ GitHub：  gwenliu1025/yuluoapi
 - 连接参数只从当前批准的安全来源读取；推荐变量名为 `YULUOAPI_SSH_HOST`、`YULUOAPI_SSH_USER`、`YULUOAPI_SSH_PORT`、`YULUOAPI_SSH_KEY`、`YULUOAPI_SSH_HOSTKEY_SHA256`。
 - 只检查变量是否存在，不打印变量值；固定校验主机公钥后再连接。
 
+### 本机管理员 API
+
+本机 Windows 用户级环境变量 `YULUOAPI_BASE_URL` 与 `YULUOAPI_ADMIN_API_KEY` 是雨落后台连接配置的读取入口；只检查是否存在，不回显密钥，不写入仓库或文档。旧进程通过 `GetEnvironmentVariable(..., 'User')` 读取最新值。变量缺失或鉴权失败时停止管理请求，由用户修正该环境变量，不搜索其它站点凭据。
+
+管理操作沿用 `skills/sub2api-admin/SKILL.md` 的 CLI；仅在当前命令进程映射其通用变量名，避免污染其它站点的用户级配置：
+
+```powershell
+$env:SUB2API_BASE_URL = [Environment]::GetEnvironmentVariable('YULUOAPI_BASE_URL', 'User')
+$env:SUB2API_ADMIN_API_KEY = [Environment]::GetEnvironmentVariable('YULUOAPI_ADMIN_API_KEY', 'User')
+if ($env:SUB2API_BASE_URL -ne 'https://sub.yuluocloud.com' -or -not $env:SUB2API_ADMIN_API_KEY) { throw '雨落管理连接配置缺失或目标不符' }
+node skills/sub2api-admin/scripts/sub2api-admin.js groups all
+```
+
+持有连接配置不扩大变更授权；先只读确认目标，写入后回读核验，保持渠道启停、支付配置、发布和生产切换各自的授权边界。
+
 ## 共同门禁
 
 - 区分代码合入、Git 推送、Release/GHCR 发布、Prepare、Activate 和生产部署；前一步不自动授权后一步。

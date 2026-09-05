@@ -91,11 +91,12 @@ func (s *OpenAIGatewayService) forwardAnthropicViaNativeAnthropicEndpoint(
 	}
 
 	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, clientStream)
-	upstreamReq, _, err := s.buildNativeAnthropicUpstreamRequest(upstreamCtx, c, account, body, apiKey, targetURL)
+	upstreamReq, wireBody, err := s.buildNativeAnthropicUpstreamRequest(upstreamCtx, c, account, body, apiKey, targetURL)
 	releaseUpstreamCtx()
 	if err != nil {
 		return nil, err
 	}
+	explicitCache := hasEphemeralMessageOrSystemCacheControl(wireBody)
 
 	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 	if err != nil {
@@ -113,10 +114,16 @@ func (s *OpenAIGatewayService) forwardAnthropicViaNativeAnthropicEndpoint(
 		return s.handleAnthropicErrorResponse(resp, c, account, billingModel)
 	}
 
+	var result *OpenAIForwardResult
 	if clientStream {
-		return s.handleNativeAnthropicStreamingResponse(ctx, resp, c, account, originalModel, billingModel, upstreamModel, reasoningEffort, startTime)
+		result, err = s.handleNativeAnthropicStreamingResponse(ctx, resp, c, account, originalModel, billingModel, upstreamModel, reasoningEffort, startTime)
+	} else {
+		result, err = s.handleNativeAnthropicBufferedResponse(ctx, resp, c, account, originalModel, billingModel, upstreamModel, reasoningEffort, startTime)
 	}
-	return s.handleNativeAnthropicBufferedResponse(ctx, resp, c, account, originalModel, billingModel, upstreamModel, reasoningEffort, startTime)
+	if result != nil {
+		result.ExplicitCache = explicitCache
+	}
+	return result, err
 }
 
 // nativeAnthropicTargetURL 组装国产供应商原生 Anthropic messages 端点。

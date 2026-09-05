@@ -609,9 +609,10 @@ type AudioUsage struct {
 }
 
 type ForwardResult struct {
-	RequestID string
-	Usage     ClaudeUsage
-	Model     string
+	RequestID     string
+	Usage         ClaudeUsage
+	ExplicitCache bool
+	Model         string
 	// UpstreamModel is the actual upstream model after mapping.
 	// Prefer empty when it is identical to Model; persistence normalizes equal values away as no-op mappings.
 	UpstreamModel string
