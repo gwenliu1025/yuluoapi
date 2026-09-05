@@ -1,15 +1,15 @@
 <template>
   <div class="plaza-pricing-table overflow-x-auto" :style="accentStyle">
-    <table class="w-full min-w-[1000px] table-fixed border-collapse text-sm tabular-nums">
+    <table class="w-full min-w-[1200px] table-fixed border-collapse text-sm tabular-nums">
       <colgroup>
-        <col class="w-[25%]" />
+        <col class="w-[23%]" />
         <col class="w-[11%]" />
         <col class="w-[9%]" />
-        <col class="w-[14%]" />
+        <col class="w-[16%]" />
         <col class="w-[11%]" />
         <col class="w-[8%]" />
-        <col class="w-[14%]" />
-        <col class="w-[8%]" />
+        <col class="w-[16%]" />
+        <col class="w-[6%]" />
       </colgroup>
       <thead>
         <tr
@@ -122,7 +122,8 @@
                 <div
                   v-for="(iv, idx) in tokenIntervals(m)"
                   :key="idx"
-                  class="whitespace-nowrap text-xs leading-5"
+                  class="tier-price-block flex items-center whitespace-nowrap text-xs leading-5"
+                  :style="`--tier-lines: ${cacheTierLineCount(iv)}`"
                 >
                   <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500" :title="tierHint(m)">{{ tierLabel(iv) }}</span>
                   {{ paidPerMillion(iv.input_price, period) }}
@@ -135,7 +136,8 @@
                 <div
                   v-for="(iv, idx) in tokenIntervals(m)"
                   :key="idx"
-                  class="whitespace-nowrap text-xs leading-5"
+                  class="tier-price-block flex items-center whitespace-nowrap text-xs leading-5"
+                  :style="`--tier-lines: ${cacheTierLineCount(iv)}`"
                   :title="tierHint(m)"
                 >
                   {{ paidPerMillion(iv.output_price, period) }}
@@ -148,43 +150,49 @@
                 <div
                   v-for="(iv, idx) in tokenIntervals(m)"
                   :key="idx"
-                  class="whitespace-nowrap font-mono text-xs leading-5 text-gray-800 dark:text-gray-200"
+                  class="tier-price-block flex flex-col justify-center font-mono text-xs text-gray-800 dark:text-gray-200"
+                  :style="`--tier-lines: ${cacheTierLineCount(iv)}`"
                   :title="tierHint(m)"
                 >
-                  <template v-if="iv.cache_write_price != null || iv.cache_write_1h_price != null || iv.cache_read_price != null || iv.explicit_cache_read_price != null">
+                  <div
+                    v-if="iv.cache_write_price != null"
+                    class="cache-price-line"
+                  >
                     <span class="font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWriteShort') }}</span>
                     {{ paidPerMillion(iv.cache_write_price, period) }}
-                    <template v-if="iv.cache_write_1h_price != null"
-                      ><span class="font-sans font-normal text-gray-400 dark:text-dark-500"> (1h </span>{{ paidPerMillion(iv.cache_write_1h_price, period)
-                      }}<span class="font-sans font-normal text-gray-400 dark:text-dark-500">)</span></template
-                    >
-                    <span class="ml-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t(iv.explicit_cache_read_price != null ? 'modelPlaza.table.cacheReadImplicitShort' : 'modelPlaza.table.cacheReadShort') }}</span>
+                  </div>
+                  <div v-if="iv.cache_write_1h_price != null" class="cache-price-line">
+                    <span class="font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWriteShort') }} (1h)</span>
+                    {{ paidPerMillion(iv.cache_write_1h_price, period) }}
+                  </div>
+                  <div v-if="iv.cache_read_price != null" class="cache-price-line">
+                    <span class="font-sans font-normal text-gray-400 dark:text-dark-500">{{ t(iv.explicit_cache_read_price != null ? 'modelPlaza.table.cacheReadImplicitShort' : 'modelPlaza.table.cacheReadShort') }}</span>
                     {{ paidPerMillion(iv.cache_read_price, period) }}
-                    <template v-if="iv.explicit_cache_read_price != null">
-                      <span class="ml-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheReadExplicitShort') }}</span>
-                      {{ paidPerMillion(iv.explicit_cache_read_price, period) }}
-                    </template>
-                  </template>
-                  <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+                  </div>
+                  <div v-if="iv.explicit_cache_read_price != null" class="cache-price-line">
+                    <span class="font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheReadExplicitShort') }}</span>
+                    {{ paidPerMillion(iv.explicit_cache_read_price, period) }}
+                  </div>
+                  <span v-if="!hasCacheInterval(iv)" class="cache-price-line text-gray-400 dark:text-dark-500">-</span>
                 </div>
               </template>
               <div
                 v-else-if="hasCachePricing(m)"
                 class="space-y-0.5 font-mono text-xs text-gray-800 dark:text-gray-200"
               >
-                <div>
+                <div v-if="m.pricing?.cache_write_price != null" class="cache-price-line">
                   <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWrite') }}</span>
-                  {{ paidPerMillion(m.pricing?.cache_write_price, period)
-                  }}<template v-if="m.pricing?.cache_write_1h_price != null"
-                    ><span class="font-sans font-normal text-gray-400 dark:text-dark-500"> (1h </span>{{ paidPerMillion(m.pricing.cache_write_1h_price, period)
-                    }}<span class="font-sans font-normal text-gray-400 dark:text-dark-500">)</span></template
-                  >
+                  {{ paidPerMillion(m.pricing.cache_write_price, period) }}
                 </div>
-                <div>
+                <div v-if="m.pricing?.cache_write_1h_price != null" class="cache-price-line">
+                  <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWrite') }} (1h)</span>
+                  {{ paidPerMillion(m.pricing.cache_write_1h_price, period) }}
+                </div>
+                <div v-if="m.pricing?.cache_read_price != null" class="cache-price-line">
                   <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t(m.pricing?.explicit_cache_read_price != null ? 'modelPlaza.table.cacheReadImplicit' : 'modelPlaza.table.cacheRead') }}</span>
                   {{ paidPerMillion(m.pricing?.cache_read_price, period) }}
                 </div>
-                <div v-if="m.pricing?.explicit_cache_read_price != null">
+                <div v-if="m.pricing?.explicit_cache_read_price != null" class="cache-price-line">
                   <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheReadExplicit') }}</span>
                   {{ paidPerMillion(m.pricing.explicit_cache_read_price, period) }}
                 </div>
@@ -228,7 +236,8 @@
               <div
                 v-for="(iv, idx) in officialIntervals(m)"
                 :key="idx"
-                class="whitespace-nowrap leading-5"
+                class="tier-price-block flex items-center whitespace-nowrap leading-5"
+                :style="`--tier-lines: ${cacheTierLineCount(iv)}`"
               >
                 <span class="mr-1 font-sans text-gray-400 dark:text-dark-500" :title="t('modelPlaza.table.tierHint')">{{ tierLabel(iv) }}</span>
                 {{ official(iv.input_price, m, period) }}
@@ -241,7 +250,8 @@
               <div
                 v-for="(iv, idx) in officialIntervals(m)"
                 :key="idx"
-                class="whitespace-nowrap leading-5"
+                class="tier-price-block flex items-center whitespace-nowrap leading-5"
+                :style="`--tier-lines: ${cacheTierLineCount(iv)}`"
                 :title="t('modelPlaza.table.tierHint')"
               >
                 {{ official(iv.output_price, m, period) }}
@@ -254,43 +264,49 @@
               <div
                 v-for="(iv, idx) in officialIntervals(m)"
                 :key="idx"
-                class="whitespace-nowrap font-mono text-xs leading-5 text-gray-500 dark:text-dark-400"
+                class="tier-price-block flex flex-col justify-center font-mono text-xs text-gray-500 dark:text-dark-400"
+                :style="`--tier-lines: ${cacheTierLineCount(iv)}`"
                 :title="t('modelPlaza.table.tierHint')"
               >
-                <template v-if="iv.cache_write_price != null || iv.cache_write_1h_price != null || iv.cache_read_price != null || iv.explicit_cache_read_price != null">
+                <div
+                  v-if="iv.cache_write_price != null"
+                  class="cache-price-line"
+                >
                   <span class="font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWriteShort') }}</span>
                   {{ official(iv.cache_write_price, m, period) }}
-                  <template v-if="iv.cache_write_1h_price != null"
-                    ><span class="font-sans text-gray-400 dark:text-dark-500"> (1h </span>{{ official(iv.cache_write_1h_price, m, period)
-                    }}<span class="font-sans text-gray-400 dark:text-dark-500">)</span></template
-                  >
-                  <span class="ml-1 font-sans text-gray-400 dark:text-dark-500">{{ t(iv.explicit_cache_read_price != null ? 'modelPlaza.table.cacheReadImplicitShort' : 'modelPlaza.table.cacheReadShort') }}</span>
+                </div>
+                <div v-if="iv.cache_write_1h_price != null" class="cache-price-line">
+                  <span class="font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWriteShort') }} (1h)</span>
+                  {{ official(iv.cache_write_1h_price, m, period) }}
+                </div>
+                <div v-if="iv.cache_read_price != null" class="cache-price-line">
+                  <span class="font-sans text-gray-400 dark:text-dark-500">{{ t(iv.explicit_cache_read_price != null ? 'modelPlaza.table.cacheReadImplicitShort' : 'modelPlaza.table.cacheReadShort') }}</span>
                   {{ official(iv.cache_read_price, m, period) }}
-                  <template v-if="iv.explicit_cache_read_price != null">
-                    <span class="ml-1 font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheReadExplicitShort') }}</span>
-                    {{ official(iv.explicit_cache_read_price, m, period) }}
-                  </template>
-                </template>
-                <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+                </div>
+                <div v-if="iv.explicit_cache_read_price != null" class="cache-price-line">
+                  <span class="font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheReadExplicitShort') }}</span>
+                  {{ official(iv.explicit_cache_read_price, m, period) }}
+                </div>
+                <span v-if="!hasCacheInterval(iv)" class="cache-price-line text-gray-400 dark:text-dark-500">-</span>
               </div>
             </template>
             <div
               v-else-if="m.official_pricing && hasOfficialCache(m.official_pricing)"
               class="space-y-0.5 font-mono text-xs text-gray-500 dark:text-dark-400"
             >
-              <div>
+              <div v-if="m.official_pricing.cache_write_price != null" class="cache-price-line">
                 <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWrite') }}</span>
-                {{ official(m.official_pricing.cache_write_price, m, period)
-                }}<template v-if="m.official_pricing.cache_write_1h_price != null"
-                  ><span class="font-sans text-gray-400 dark:text-dark-500"> (1h </span>{{ official(m.official_pricing.cache_write_1h_price, m, period)
-                  }}<span class="font-sans text-gray-400 dark:text-dark-500">)</span></template
-                >
+                {{ official(m.official_pricing.cache_write_price, m, period) }}
               </div>
-              <div>
+              <div v-if="m.official_pricing.cache_write_1h_price != null" class="cache-price-line">
+                <span class="mr-1 font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWrite') }} (1h)</span>
+                {{ official(m.official_pricing.cache_write_1h_price, m, period) }}
+              </div>
+              <div v-if="m.official_pricing.cache_read_price != null" class="cache-price-line">
                 <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t(m.official_pricing.explicit_cache_read_price != null ? 'modelPlaza.table.cacheReadImplicit' : 'modelPlaza.table.cacheRead') }}</span>
                 {{ official(m.official_pricing.cache_read_price, m, period) }}
               </div>
-              <div v-if="m.official_pricing.explicit_cache_read_price != null">
+              <div v-if="m.official_pricing.explicit_cache_read_price != null" class="cache-price-line">
                 <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheReadExplicit') }}</span>
                 {{ official(m.official_pricing.explicit_cache_read_price, m, period) }}
               </div>
@@ -570,9 +586,27 @@ function officialIntervals(m: PlazaModel): UserPricingInterval[] {
   return sortByContext(m.official_pricing?.intervals ?? [])
 }
 
-/** 任一档带缓存价才按档渲染缓存列;否则沿用平价的写入/读取两行。 */
+function hasCacheInterval(iv: UserPricingInterval): boolean {
+  return (
+    iv.cache_write_price != null ||
+    iv.cache_write_1h_price != null ||
+    iv.cache_read_price != null ||
+    iv.explicit_cache_read_price != null
+  )
+}
+
+/** 同一档的输入、输出与缓存块共用缓存明细行数，避免相邻档位纵向错位。 */
+function cacheTierLineCount(iv: UserPricingInterval): number {
+  const lines = Number(iv.cache_write_price != null) +
+    Number(iv.cache_write_1h_price != null) +
+    Number(iv.cache_read_price != null) +
+    Number(iv.explicit_cache_read_price != null)
+  return Math.max(lines, 1)
+}
+
+/** 任一档带缓存价才按档渲染缓存列；否则沿用平价缓存明细。 */
 function hasTierCachePricing(intervals: UserPricingInterval[]): boolean {
-  return intervals.some((iv) => iv.cache_write_price != null || iv.cache_write_1h_price != null || iv.cache_read_price != null || iv.explicit_cache_read_price != null)
+  return intervals.some(hasCacheInterval)
 }
 
 /** 档位说明:整单按档计价,或(平台旧规则)仅超出部分按档计价。 */
@@ -646,5 +680,19 @@ tbody tr:hover .pz-cell {
 
 .pz-unit {
   color: color-mix(in srgb, var(--pz-title) 62%, transparent);
+}
+
+/* 各计价列以同一缓存明细行数撑开档位，缓存标签与金额保持为不可拆整体。 */
+.tier-price-block {
+  min-height: calc(var(--tier-lines, 1) * 1.25rem);
+}
+
+.cache-price-line {
+  /* flex 统一混合字体的实际行框，避免浏览器缩放时缓存块比同档输入/输出更高。 */
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  line-height: 1.25rem;
 }
 </style>

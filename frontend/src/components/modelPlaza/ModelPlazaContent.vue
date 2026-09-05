@@ -33,18 +33,21 @@
       {{ t('modelPlaza.loadFailed') }}
     </div>
     <template v-else>
-      <!-- 筛选区:平台 → 分组 → 倍率 -->
+      <!-- 各维度分别单选；系列只过滤当前账号已获授权的模型。 -->
       <PlazaFilterBar
         :platforms="platforms"
         :groups="groupOptions"
         :rates="rates"
+        :series-options="seriesOptions"
         :platform="selectedPlatform"
         :group-id="selectedGroupId"
         :rate="selectedRate"
+        :series="selectedSeries"
         :search="searchQuery"
         @update:platform="selectedPlatform = $event"
         @update:group-id="selectedGroupId = $event"
         @update:rate="selectedRate = $event"
+        @update:series="selectedSeries = $event"
         @update:search="searchQuery = $event"
       />
 
@@ -70,6 +73,7 @@ import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
 import PlazaFilterBar from './PlazaFilterBar.vue'
 import PlazaGroupSection from './PlazaGroupSection.vue'
+import { MODEL_SERIES, modelSeries, type ModelSeries } from './modelSeries'
 import type { ModelPlazaGroup, ModelPlazaResponse } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
 
@@ -88,9 +92,13 @@ const isAuthenticated = computed(() => authStore.isAuthenticated)
 const selectedPlatform = ref<string>('all')
 const selectedGroupId = ref<number | 'all'>('all')
 const selectedRate = ref<number | 'all'>('all')
+const selectedSeries = ref<ModelSeries | 'all'>('all')
 const searchQuery = ref('')
 
-const searchActive = computed(() => searchQuery.value.trim() !== '')
+const searchActive = computed(() =>
+  searchQuery.value.trim() !== '' || selectedSeries.value !== 'all' ||
+  selectedGroupId.value !== 'all' || selectedPlatform.value !== 'all' || selectedRate.value !== 'all'
+)
 
 const descriptionHtml = computed(() => {
   const md = props.response?.description?.trim()
@@ -112,9 +120,31 @@ const groupOptions = computed(() =>
     id: g.id,
     name: g.name,
     platform: g.platform,
-    rate: effectiveRate(g)
+    rate: effectiveRate(g),
+    series: [...new Set(g.models.map((m) => modelSeries(m.name)))]
   }))
 )
+
+const seriesOptions = computed(() =>
+  MODEL_SERIES.filter((s) => groupOptions.value.some((g) => g.series.includes(s)))
+)
+
+// 权限响应更新后，不保留已经失效的选项或旧分组结果。
+watch(groupOptions, (groups) => {
+  if (selectedGroupId.value !== 'all' && !groups.some((g) => g.id === selectedGroupId.value)) {
+    selectedGroupId.value = 'all'
+  }
+})
+watch(platforms, (list) => {
+  if (selectedPlatform.value !== 'all' && !list.includes(selectedPlatform.value)) {
+    selectedPlatform.value = 'all'
+  }
+})
+watch(seriesOptions, (list) => {
+  if (selectedSeries.value !== 'all' && !list.includes(selectedSeries.value)) {
+    selectedSeries.value = 'all'
+  }
+})
 
 /** 全量生效倍率;当前组合下不可用的项由 FilterBar 置灰而非隐藏。 */
 const rates = computed(() =>
@@ -139,11 +169,14 @@ const filteredGroups = computed(() => {
   if (selectedRate.value !== 'all') {
     groups = groups.filter((g) => effectiveRate(g) === selectedRate.value)
   }
-  // 模型名搜索:分组内只留命中的模型,整组无命中则隐藏该分组。
+  // 系列与搜索取交集，不改写调用名、平台或报价；整组无命中则隐藏。
   const q = searchQuery.value.trim().toLowerCase()
-  if (q) {
+  if (q || selectedSeries.value !== 'all') {
     groups = groups
-      .map((g) => ({ ...g, models: g.models.filter((m) => m.name.toLowerCase().includes(q)) }))
+      .map((g) => ({ ...g, models: g.models.filter((m) =>
+        (selectedSeries.value === 'all' || modelSeries(m.name) === selectedSeries.value) &&
+        m.name.toLowerCase().includes(q)
+      ) }))
       .filter((g) => g.models.length > 0)
   }
   // 专属倍率会改变生效值,不能只依赖后端按默认倍率的排序。

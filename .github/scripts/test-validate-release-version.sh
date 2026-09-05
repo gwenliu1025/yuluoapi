@@ -30,7 +30,7 @@ expect_reject() {
 
 expect_accept "official release" "v0.1.169" "0.1.169"
 expect_accept "multi-digit components" "v12.34.56" "12.34.56"
-expect_accept "rainfall padded patch release" "v0.2.002" "0.2.002"
+expect_accept "rainfall padded patch release" "v0.2.003" "0.2.003"
 
 expect_reject "image v prefix" "v0.1.169" "v0.1.169"
 expect_reject "latest alias" "v0.1.169" "latest"

@@ -609,6 +609,9 @@ export default {
     filters: {
       platformLabel: 'Platform',
       groupLabel: 'Group',
+      seriesLabel: 'Model series',
+      seriesNames: { deepseek: 'DeepSeek', qwen: 'Qwen', kimi: 'Kimi', glm: 'GLM', other: 'Other' },
+      seriesDescriptions: { deepseek: 'DeepSeek', qwen: 'Qwen by Alibaba', kimi: 'Moonshot AI', glm: 'Zhipu AI', other: 'Other model series' },
       rateLabel: 'Rate',
       modelLabel: 'Model',
       searchPlaceholder: 'Search models',

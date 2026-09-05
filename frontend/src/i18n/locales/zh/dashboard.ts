@@ -614,6 +614,9 @@ export default {
     filters: {
       platformLabel: '平台',
       groupLabel: '分组',
+      seriesLabel: '模型系列',
+      seriesNames: { deepseek: 'DeepSeek', qwen: 'Qwen', kimi: 'Kimi', glm: 'GLM', other: '其他' },
+      seriesDescriptions: { deepseek: 'DeepSeek', qwen: '通义千问', kimi: '月之暗面', glm: '智谱', other: '其他模型系列' },
       rateLabel: '倍率',
       modelLabel: '模型',
       searchPlaceholder: '搜索模型名称',

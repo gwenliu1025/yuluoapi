@@ -12,7 +12,7 @@
 
 services:
   sub2api:
-    image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/yuluoapi:0.2.002}
+    image: ${SUB2API_IMAGE:-ghcr.io/gwenliu1025/yuluoapi:0.2.003}
     container_name: sub2api
     restart: unless-stopped
     security_opt:

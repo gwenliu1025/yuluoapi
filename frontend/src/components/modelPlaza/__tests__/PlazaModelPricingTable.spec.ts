@@ -201,6 +201,8 @@ describe('PlazaModelPricingTable', () => {
     expect(text).toContain('modelPlaza.table.officialPrice')
     // token 行:模型 + 实付 3 列 + 官方 3 列 + 倍率
     expect(wrapper.findAll('tbody td')).toHaveLength(8)
+    expect(wrapper.classes()).toContain('overflow-x-auto')
+    expect(wrapper.find('table').classes()).toContain('min-w-[1200px]')
   })
 
   it('官方价包含 1h 缓存写入价;official_pricing 为 null 时官方三列显示 -', () => {
@@ -565,14 +567,19 @@ describe('PlazaModelPricingTable 长上下文阶梯', () => {
     const wrapper = mountTable([ladderModel()], 0.5)
     const cells = wrapper.findAll('tbody td')
     const cacheCell = cells[3]
-    const rows = cacheCell.findAll('.leading-5')
+    const rows = cacheCell.findAll('.tier-price-block')
     expect(rows).toHaveLength(2)
     // 写 6.25 × 0.5 / 读 0.5 × 0.5;高档 12.5 × 0.5 / 1 × 0.5
-    expect(rows[0].text()).toContain('modelPlaza.table.cacheWriteShort')
-    expect(rows[0].text()).toContain('¥3.125')
-    expect(rows[0].text()).toContain('¥0.25')
+    expect(rows[0].findAll('.cache-price-line').map((line) => line.text())).toEqual([
+      'modelPlaza.table.cacheWriteShort ¥3.125',
+      'modelPlaza.table.cacheReadShort ¥0.25'
+    ])
     expect(rows[1].text()).toContain('¥6.25')
     expect(rows[1].text()).toContain('¥0.50')
+    expect(rows.map((row) => row.attributes('style'))).toEqual([
+      '--tier-lines: 2;',
+      '--tier-lines: 2;'
+    ])
     // 输入列带标签,输出/缓存列只按行对齐不重复标签
     expect(cells[1].text()).toContain('≤272K')
     expect(cells[1].text()).toContain('>272K')
@@ -580,6 +587,12 @@ describe('PlazaModelPricingTable 长上下文阶梯', () => {
     expect(cacheCell.text()).not.toContain('272K')
     expect(cells[1].findAll('.leading-5')).toHaveLength(2)
     expect(cells[2].findAll('.leading-5')).toHaveLength(2)
+    expect(cells[1].findAll('.tier-price-block').map((row) => row.attributes('style'))).toEqual(
+      rows.map((row) => row.attributes('style'))
+    )
+    expect(cells[2].findAll('.tier-price-block').map((row) => row.attributes('style'))).toEqual(
+      rows.map((row) => row.attributes('style'))
+    )
   })
 
   it('官方三列按 official_pricing.intervals 分档且不乘倍率,不内联 1h', () => {
@@ -600,6 +613,7 @@ describe('PlazaModelPricingTable 长上下文阶梯', () => {
   it('阶梯缓存价逐档展示隐式与显式读取金额', () => {
     const priced = ladderIntervals().map((interval, index) => ({
       ...interval,
+      cache_write_1h_price: (index + 6) * 1e-6,
       cache_read_price: (index + 2) * 1e-6,
       explicit_cache_read_price: (index + 1) * 1e-6
     }))
@@ -614,12 +628,53 @@ describe('PlazaModelPricingTable 长上下文阶梯', () => {
     })
 
     const cells = mountTable([model], 0.5).findAll('tbody td')
-    expect(cells[3].text()).toContain('modelPlaza.table.cacheReadImplicitShort ¥1.00')
-    expect(cells[3].text()).toContain('modelPlaza.table.cacheReadExplicitShort ¥0.50')
+    const paidRows = cells[3].findAll('.tier-price-block')
+    expect(paidRows[0].findAll('.cache-price-line').map((line) => line.text())).toEqual([
+      'modelPlaza.table.cacheWriteShort ¥3.125',
+      'modelPlaza.table.cacheWriteShort (1h) ¥3.00',
+      'modelPlaza.table.cacheReadImplicitShort ¥1.00',
+      'modelPlaza.table.cacheReadExplicitShort ¥0.50'
+    ])
     expect(cells[3].text()).toContain('modelPlaza.table.cacheReadImplicitShort ¥1.50')
     expect(cells[3].text()).toContain('modelPlaza.table.cacheReadExplicitShort ¥1.00')
-    expect(cells[6].text()).toContain('modelPlaza.table.cacheReadImplicitShort ¥4.00')
-    expect(cells[6].text()).toContain('modelPlaza.table.cacheReadExplicitShort ¥3.00')
+    const officialRows = cells[6].findAll('.tier-price-block')
+    expect(officialRows[0].findAll('.cache-price-line').map((line) => line.text())).toEqual([
+      'modelPlaza.table.cacheWriteShort ¥6.25',
+      'modelPlaza.table.cacheReadImplicitShort ¥4.00',
+      'modelPlaza.table.cacheReadExplicitShort ¥3.00'
+    ])
+    expect(paidRows.map((row) => row.attributes('style'))).toEqual([
+      '--tier-lines: 4;',
+      '--tier-lines: 4;'
+    ])
+  })
+
+  it('实付无阶梯时不借用官方档位；官方各档独立对齐并保留无缓存档', () => {
+    const reference = ladderIntervals()
+    reference[1] = { ...reference[1], max_tokens: 500000 }
+    reference.push({
+      ...reference[1],
+      min_tokens: 500000,
+      max_tokens: null,
+      tier_label: '>500K',
+      cache_write_price: null,
+      cache_read_price: null
+    })
+    const model = ladderModel({
+      pricing: { ...ladderModel().pricing!, intervals: [] },
+      official_pricing: { ...ladderModel().official_pricing!, intervals: reference }
+    })
+
+    const cells = mountTable([model], 1).findAll('tbody td')
+    expect(cells[1].findAll('.tier-price-block')).toHaveLength(0)
+    expect(cells[3].findAll('.cache-price-line')).toHaveLength(2)
+    expect(cells[4].findAll('.tier-price-block')).toHaveLength(3)
+    expect(cells[5].findAll('.tier-price-block')).toHaveLength(3)
+    const officialCacheRows = cells[6].findAll('.tier-price-block')
+    expect(officialCacheRows).toHaveLength(3)
+    expect(officialCacheRows[2].findAll('.cache-price-line').map((line) => line.text())).toEqual(['-'])
+    expect(cells[4].findAll('.tier-price-block')[2].attributes('style')).toBe('--tier-lines: 1;')
+    expect(cells[5].findAll('.tier-price-block')[2].attributes('style')).toBe('--tier-lines: 1;')
   })
 
   it('整单计价的档位标签带 tooltip;边际计价在模型名旁加徽章并换用边际说明', () => {

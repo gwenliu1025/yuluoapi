@@ -2,7 +2,7 @@
   <div class="space-y-3">
     <!-- 一级:平台 -->
     <div class="flex items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
+      <span class="w-16 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.filters.platformLabel') }}
       </span>
       <div class="flex flex-wrap items-center gap-2">
@@ -22,16 +22,17 @@
       </div>
     </div>
 
-    <!-- 二级:分组(按所属平台着色,当前组合下无结果的置灰) -->
+    <!-- 分组与“全部”互斥；未选项保持中性底色，不用平台色暗示选中。 -->
     <div class="flex items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
+      <span class="w-16 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.filters.groupLabel') }}
       </span>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2" role="group" :aria-label="t('modelPlaza.filters.groupLabel')">
         <button
           type="button"
           class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
           :class="chipClass(groupId === 'all')"
+          :aria-pressed="groupId === 'all'"
           @click="$emit('update:groupId', 'all')"
         >
           {{ t('modelPlaza.filters.all') }}
@@ -41,8 +42,8 @@
           :key="`group-${g.id}`"
           type="button"
           class="rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 disabled:grayscale"
-          :class="groupId === g.id ? 'chip-tinted-active' : 'chip-tinted'"
-          :style="{ '--chip-accent': platformAccentColor(g.platform) }"
+          :class="chipClass(groupId === g.id)"
+          :aria-pressed="groupId === g.id"
           :disabled="!groupEnabled(g)"
           @click="$emit('update:groupId', g.id)"
         >
@@ -51,9 +52,40 @@
       </div>
     </div>
 
-    <!-- 三级:倍率(当前组合下不存在的置灰) -->
+    <!-- 系列独立于 OpenAI 等接入平台，并与当前分组组合筛选。 -->
     <div class="flex items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
+      <span class="w-16 shrink-0 pt-2 text-xs font-semibold text-gray-400 dark:text-dark-500">
+        {{ t('modelPlaza.filters.seriesLabel') }}
+      </span>
+      <div class="flex flex-wrap items-center gap-2" role="group" :aria-label="t('modelPlaza.filters.seriesLabel')">
+        <button
+          type="button"
+          class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+          :class="chipClass(series === 'all')"
+          :aria-pressed="series === 'all'"
+          @click="$emit('update:series', 'all')"
+        >
+          {{ t('modelPlaza.filters.all') }}
+        </button>
+        <button
+          v-for="s in seriesOptions"
+          :key="s"
+          type="button"
+          class="rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
+          :class="chipClass(series === s)"
+          :aria-pressed="series === s"
+          :title="t(`modelPlaza.filters.seriesDescriptions.${s}`)"
+          :disabled="!seriesEnabled(s)"
+          @click="$emit('update:series', s)"
+        >
+          {{ t(`modelPlaza.filters.seriesNames.${s}`) }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 倍率(当前组合下不存在的置灰) -->
+    <div class="flex items-start gap-2">
+      <span class="w-16 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.filters.rateLabel') }}
       </span>
       <div class="flex flex-wrap items-center gap-2">
@@ -81,7 +113,7 @@
 
     <!-- 四级:模型名搜索(纯前端过滤) -->
     <div class="flex flex-wrap items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
+      <span class="w-16 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.filters.modelLabel') }}
       </span>
       <div class="relative w-full sm:w-72">
@@ -116,17 +148,20 @@ import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import { platformAccentColor } from '@/utils/platformColors'
 import type { GroupPlatform } from '@/types'
+import type { ModelSeries } from './modelSeries'
 
 const props = defineProps<{
   /** 数据中出现的平台(去重排序后)。 */
   platforms: string[]
-  /** 全量分组(含平台与生效倍率),三个维度的置灰联动由此推导。 */
-  groups: Array<{ id: number; name: string; platform: string; rate: number }>
+  /** 仅含服务端已授权分组；系列元数据不引入新的模型或价格。 */
+  groups: Array<{ id: number; name: string; platform: string; rate: number; series: ModelSeries[] }>
   /** 全量生效倍率去重升序。 */
   rates: number[]
   platform: string
   groupId: number | 'all'
   rate: number | 'all'
+  seriesOptions: ModelSeries[]
+  series: ModelSeries | 'all'
   /** 模型名搜索词(纯前端过滤)。 */
   search: string
 }>()
@@ -135,13 +170,14 @@ defineEmits<{
   'update:platform': [value: string]
   'update:groupId': [value: number | 'all']
   'update:rate': [value: number | 'all']
+  'update:series': [value: ModelSeries | 'all']
   'update:search': [value: string]
 }>()
 
 const { t } = useI18n()
 
 /**
- * 三个维度互为约束(faceted):某选项可点 ⟺ 在「其他两维」当前选择下仍有分组命中。
+ * 各维度互为约束：某选项可点，当且仅当其余维度下仍有分组命中。
  * 「全部」永远可点,作为解除本维约束的出口;可点项组合恒有结果,无需选择修正。
  */
 function platformEnabled(p: string): boolean {
@@ -149,14 +185,16 @@ function platformEnabled(p: string): boolean {
     (g) =>
       g.platform === p &&
       (props.groupId === 'all' || g.id === props.groupId) &&
-      (props.rate === 'all' || g.rate === props.rate)
+      (props.rate === 'all' || g.rate === props.rate) &&
+      (props.series === 'all' || g.series.includes(props.series))
   )
 }
 
-function groupEnabled(g: { platform: string; rate: number }): boolean {
+function groupEnabled(g: { platform: string; rate: number; series: ModelSeries[] }): boolean {
   return (
     (props.platform === 'all' || g.platform === props.platform) &&
-    (props.rate === 'all' || g.rate === props.rate)
+    (props.rate === 'all' || g.rate === props.rate) &&
+    (props.series === 'all' || g.series.includes(props.series))
   )
 }
 
@@ -165,7 +203,17 @@ function rateEnabled(r: number): boolean {
     (g) =>
       g.rate === r &&
       (props.platform === 'all' || g.platform === props.platform) &&
-      (props.groupId === 'all' || g.id === props.groupId)
+      (props.groupId === 'all' || g.id === props.groupId) &&
+      (props.series === 'all' || g.series.includes(props.series))
+  )
+}
+
+function seriesEnabled(s: ModelSeries): boolean {
+  return props.groups.some((g) =>
+    g.series.includes(s) &&
+    (props.platform === 'all' || g.platform === props.platform) &&
+    (props.groupId === 'all' || g.id === props.groupId) &&
+    (props.rate === 'all' || g.rate === props.rate)
   )
 }
 
@@ -177,7 +225,7 @@ function chipClass(active: boolean): string {
 </script>
 
 <style scoped>
-/* 平台/分组 chip 的配色统一从 --chip-accent(平台主色)派生,新增平台无需扩展样式。
+/* 平台 chip 的配色统一从 --chip-accent(平台主色)派生,新增平台无需扩展样式。
    激活态与非激活态在模板上互斥挂载,避免选择器优先级互相覆盖。 */
 .chip-tinted {
   color: var(--chip-accent);
