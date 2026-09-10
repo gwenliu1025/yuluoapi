@@ -48,9 +48,11 @@ type TimePricingSchedule struct {
 // 单价由真实计费函数探针得出，与扣费同源；单档表示无阶梯。
 // Tiers 为标准时段单价；TimePricing 非 nil 时，落在时段内的请求整单再乘对应倍率。
 type ContextPricingSchedule struct {
-	Basis       ContextPricingBasis
-	Tiers       []ContextPricingTier
-	TimePricing *TimePricingSchedule
+	// 消费同一解析结果的推理倍率，展示层不再读取被分组覆盖的渠道卡。
+	MaxReasoningEffortMultiplier *float64
+	Basis                        ContextPricingBasis
+	Tiers                        []ContextPricingTier
+	TimePricing                  *TimePricingSchedule
 }
 
 // ContextPricingScheduleInput 阶梯表查询输入。
@@ -134,7 +136,15 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 	tiers = mergeEqualContextTiers(tiers)
 	applyContextTierLabels(tiers, plan)
 
-	return &ContextPricingSchedule{Basis: ContextPricingBasisWholeRequest, Tiers: tiers, TimePricing: resolvedTimePricingSchedule(resolved)}, nil
+	maxMultiplier := maxReasoningEffortBillingMultiplier(in.Model, "max", resolved.BasePricing)
+	var displayedMaxMultiplier *float64
+	if maxMultiplier != 1 || (resolved.BasePricing != nil && resolved.BasePricing.MaxReasoningEffortMultiplier != nil) {
+		displayedMaxMultiplier = &maxMultiplier
+	}
+	return &ContextPricingSchedule{
+		Basis: ContextPricingBasisWholeRequest, Tiers: tiers, TimePricing: resolvedTimePricingSchedule(resolved),
+		MaxReasoningEffortMultiplier: displayedMaxMultiplier,
+	}, nil
 }
 
 // resolvedTimePricingSchedule 列出计费会生效的分时倍率时段。

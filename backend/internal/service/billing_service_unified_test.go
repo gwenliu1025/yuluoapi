@@ -273,7 +273,7 @@ func TestCalculateCostUnified_ChannelTimePricingDoesNotApplyOutsideMatchingTime(
 	billing := NewBillingService(&config.Config{}, nil)
 
 	for _, pricingAt := range []time.Time{
-		time.Time{},
+		time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 8, 17, 5, 0, 0, 0, time.UTC),
 	} {
 		cost, err := billing.CalculateCostUnified(CostInput{
@@ -287,6 +287,24 @@ func TestCalculateCostUnified_ChannelTimePricingDoesNotApplyOutsideMatchingTime(
 		require.NoError(t, err)
 		require.InDelta(t, 1.0, cost.TotalCost, 1e-12)
 	}
+}
+
+// 缺省计费时刻应使用当前时间；全天时段让验证不依赖测试运行的钟点。
+func TestCalculateCostUnified_ZeroPricingAtUsesCurrentTime(t *testing.T) {
+	resolved := channelTimeResolvedForTest(&ModelPricing{InputPricePerToken: 0.001}, nil)
+	resolved.channelPricing.TimePricing.WeekdaysOnly = false
+	resolved.channelPricing.TimePricing.Periods = []ChannelTimePricingPeriod{
+		{StartTime: "00:00", EndTime: "12:00", Multiplier: 2},
+		{StartTime: "12:00", EndTime: "00:00", Multiplier: 2},
+	}
+	require.NoError(t, validateChannelTimePricing(resolved.channelPricing.TimePricing))
+	billing := NewBillingService(&config.Config{}, nil)
+	cost, err := billing.CalculateCostUnified(CostInput{
+		Ctx: context.Background(), Model: "model", Tokens: UsageTokens{InputTokens: 1000},
+		Resolver: &ModelPricingResolver{}, Resolved: resolved,
+	})
+	require.NoError(t, err)
+	require.InDelta(t, 2.0, cost.TotalCost, 1e-12)
 }
 
 func TestApplyCostBreakdownMultiplierScalesAllMonetaryFields(t *testing.T) {

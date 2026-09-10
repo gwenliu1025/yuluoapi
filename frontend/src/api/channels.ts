@@ -45,6 +45,7 @@ export interface UserSupportedModelPricing {
   cache_read_price: number | null
   /** 隐式/显式缓存读取价不同时，单独给出显式读取价；原字段表示隐式读取。 */
   explicit_cache_read_price?: number | null
+  max_reasoning_effort_multiplier?: number | null
   image_input_price: number | null
   image_output_price: number | null
   per_request_price: number | null

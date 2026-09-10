@@ -32,6 +32,12 @@ GitHub：  gwenliu1025/yuluoapi
 - 连接参数只从当前批准的安全来源读取；推荐变量名为 `YULUOAPI_SSH_HOST`、`YULUOAPI_SSH_USER`、`YULUOAPI_SSH_PORT`、`YULUOAPI_SSH_KEY`、`YULUOAPI_SSH_HOSTKEY_SHA256`。
 - 只检查变量是否存在，不打印变量值；固定校验主机公钥后再连接。
 
+### 国内迁移目标 SSH
+
+本机 Windows 用户级 `YULUOAPI_CN_SSH_HOST`、`YULUOAPI_CN_SSH_USER`、`YULUOAPI_CN_SSH_PORT`、`YULUOAPI_CN_SSH_PASSWORD` 是本次西安目标机的连接入口。密码只保存在用户环境变量中；脚本通过 `[Environment]::GetEnvironmentVariable(<变量名>, 'User')` 读取最新值，只输出存在性或核验结果，不打印值，不写入脚本、文档、日志或仓库。
+
+连接前必须取得并核验 `YULUOAPI_CN_SSH_HOSTKEY_SHA256`；网络探针采集的公钥指纹只作为待核对值，不自动认定可信。目标连接未完成验收前，保留既有源机连接配置，不用新机变量覆盖源机变量。当前连通性与迁移进度只读取根目录 `CURRENT_STATE.md` 的国内迁移任务。
+
 ### 本机管理员 API
 
 本机 Windows 用户级环境变量 `YULUOAPI_BASE_URL` 与 `YULUOAPI_ADMIN_API_KEY` 是雨落后台连接配置的读取入口；只检查是否存在，不回显密钥，不写入仓库或文档。旧进程通过 `GetEnvironmentVariable(..., 'User')` 读取最新值。变量缺失或鉴权失败时停止管理请求，由用户修正该环境变量，不搜索其它站点凭据。

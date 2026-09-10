@@ -7,14 +7,15 @@ import (
 
 // TokenCostRequest 通用网关 token 计费请求。
 type TokenCostRequest struct {
-	Ctx            context.Context
-	Model          string
-	Group          *Group
-	Tokens         UsageTokens
-	RateMultiplier float64
-	PricingAt      time.Time
-	ServiceTier    string
-	Resolver       *ModelPricingResolver
+	Ctx             context.Context
+	Model           string
+	Group           *Group
+	Tokens          UsageTokens
+	RateMultiplier  float64
+	PricingAt       time.Time
+	ServiceTier     string
+	ReasoningEffort string
+	Resolver        *ModelPricingResolver
 	// Resolved 为调用方预先解析的定价（Resolver.Resolve 的结果），nil 表示未解析。
 	Resolved        *ResolvedPricing
 	skipTimePricing bool
@@ -43,6 +44,7 @@ func (s *BillingService) tokenCostInput(req TokenCostRequest, resolved *Resolved
 		Resolver:        req.Resolver,
 		Resolved:        resolved,
 		skipTimePricing: req.skipTimePricing,
+		ReasoningEffort: req.ReasoningEffort,
 	}
 	if req.Group != nil {
 		gid := req.Group.ID

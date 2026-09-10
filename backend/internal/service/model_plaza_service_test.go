@@ -57,6 +57,19 @@ func TestListPlazaGroups_GroupCentricAggregation(t *testing.T) {
 	require.Equal(t, "claude-sonnet", out[0].Models[1].Name)
 }
 
+func TestWithDefaultMaxReasoningEffortMultiplier_Fable51(t *testing.T) {
+	base := &ChannelModelPricing{BillingMode: BillingModeToken}
+	got := withDefaultMaxReasoningEffortMultiplier(base, "claude-fable-5-1")
+	require.NotSame(t, base, got)
+	require.NotNil(t, got.MaxReasoningEffortMultiplier)
+	require.Equal(t, 3.0, *got.MaxReasoningEffortMultiplier)
+	require.Nil(t, base.MaxReasoningEffortMultiplier)
+
+	configured := 1.25
+	custom := &ChannelModelPricing{MaxReasoningEffortMultiplier: &configured}
+	require.Same(t, custom, withDefaultMaxReasoningEffortMultiplier(custom, "claude-fable-5-1"))
+}
+
 func TestListPlazaGroups_DedupFirstWinsWithPricingUpgrade(t *testing.T) {
 	// 同名模型:先见者胜;仅当已存条目无定价而新条目有定价时升级替换。
 	unpriced := Channel{
@@ -494,4 +507,22 @@ func TestListGroups_TimePricingPassthrough(t *testing.T) {
 	require.InDelta(t, 0.5, m.TimePricing.Periods[0].Multiplier, 1e-12)
 	// 展示单价为标准时段价
 	require.InDelta(t, 0.28e-6, *m.Pricing.InputPrice, 1e-15)
+}
+
+// 展示倍率与实收解析共用分组优先级，不能回退到被覆盖的渠道卡。
+func TestListGroups_MaxReasoningMultiplierUsesEffectiveGroupPricing(t *testing.T) {
+	channel := plazaPricedChannel(1, "ch", []int64{10}, PlatformAnthropic, "claude-fable-5-1")
+	channel.ModelPricing[0].MaxReasoningEffortMultiplier = testPtrFloat64(2)
+	groupPricing := channel.ModelPricing[0].Clone()
+	groupPricing.MaxReasoningEffortMultiplier = testPtrFloat64(1)
+	group := Group{ID: 10, Name: "g", Platform: PlatformAnthropic, RateMultiplier: 1, ModelPricing: []ChannelModelPricing{groupPricing}}
+	svc := newPlazaServiceWithBilling([]Channel{channel}, []Group{group}, map[int64]string{10: PlatformAnthropic}, nil)
+	groups, err := svc.ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Len(t, groups[0].Models, 1)
+	displayed := groups[0].Models[0].Pricing
+	require.NotNil(t, displayed.MaxReasoningEffortMultiplier)
+	require.Equal(t, 1.0, *displayed.MaxReasoningEffortMultiplier)
+	require.Equal(t, 2.0, *channel.ModelPricing[0].MaxReasoningEffortMultiplier, "共享渠道卡保持不变")
 }

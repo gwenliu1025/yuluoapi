@@ -18,6 +18,7 @@ import (
 // upstreamModel 是最终发往上游的模型 ID。
 // totalCost 是本次请求的客户计费（倍率前），用于优先级 2。
 // serviceTier 是最终参与用户计费的 OpenAI 服务层级，用于优先级 3。
+// reasoningEffort 是最终转发等级；Fable 5.1 max 默认按 3 倍额度消耗。
 func resolveAccountStatsCost(
 	ctx context.Context,
 	channelService *ChannelService,
@@ -30,7 +31,12 @@ func resolveAccountStatsCost(
 	totalCost float64,
 	serviceTier string,
 	pricingAt time.Time,
+	reasoningEfforts ...string,
 ) *float64 {
+	reasoningEffort := ""
+	if len(reasoningEfforts) > 0 {
+		reasoningEffort = reasoningEfforts[0]
+	}
 	if channelService == nil || upstreamModel == "" {
 		return nil
 	}
@@ -42,7 +48,7 @@ func resolveAccountStatsCost(
 	platform := channelService.GetGroupPlatform(ctx, groupID)
 
 	// 优先级 1：自定义规则（始终尝试）
-	if cost := tryCustomRules(ctx, billingService, channel, accountID, groupID, platform, upstreamModel, tokens, requestCount, serviceTier, pricingAt); cost != nil {
+	if cost := tryCustomRules(ctx, billingService, channel, accountID, groupID, platform, upstreamModel, tokens, requestCount, serviceTier, pricingAt, reasoningEffort); cost != nil {
 		return cost
 	}
 
@@ -57,7 +63,7 @@ func resolveAccountStatsCost(
 
 	// 优先级 3：模型定价文件（LiteLLM）默认价格
 	if billingService != nil {
-		return tryModelFilePricing(ctx, billingService, upstreamModel, tokens, serviceTier, pricingAt)
+		return tryModelFilePricing(ctx, billingService, upstreamModel, tokens, serviceTier, pricingAt, reasoningEffort)
 	}
 
 	return nil
@@ -69,11 +75,16 @@ func resolveAccountStatsCost(
 // 语义：只取模型定价文件，不引入渠道自定义定价。
 func tryModelFilePricing(
 	ctx context.Context, billingService *BillingService, model string,
-	tokens UsageTokens, serviceTier string, pricingAt time.Time,
+	tokens UsageTokens, serviceTier string, pricingAt time.Time, reasoningEfforts ...string,
 ) *float64 {
+	reasoningEffort := ""
+	if len(reasoningEfforts) > 0 {
+		reasoningEffort = reasoningEfforts[0]
+	}
 	breakdown, err := billingService.CalculateCostUnified(CostInput{
 		Ctx: ctx, Model: model, Tokens: tokens, RateMultiplier: 1,
 		ServiceTier: normalizeBillingServiceTier(serviceTier), PricingAt: pricingAt,
+		ReasoningEffort: reasoningEffort,
 	})
 	if err != nil || breakdown == nil || breakdown.TotalCost <= 0 {
 		return nil
@@ -85,8 +96,12 @@ func tryModelFilePricing(
 func tryCustomRules(
 	ctx context.Context, billingService *BillingService,
 	channel *Channel, accountID, groupID int64,
-	platform, model string, tokens UsageTokens, requestCount int, serviceTier string, pricingAt time.Time,
+	platform, model string, tokens UsageTokens, requestCount int, serviceTier string, pricingAt time.Time, reasoningEfforts ...string,
 ) *float64 {
+	reasoningEffort := ""
+	if len(reasoningEfforts) > 0 {
+		reasoningEffort = reasoningEfforts[0]
+	}
 	modelLower := strings.ToLower(model)
 	for _, rule := range channel.AccountStatsPricingRules {
 		if !matchAccountStatsRule(&rule, accountID, groupID) {
@@ -96,7 +111,7 @@ func tryCustomRules(
 		if pricing == nil {
 			continue // 规则匹配但模型不在规则定价中，继续下一条
 		}
-		return calculateStatsCost(ctx, billingService, pricing, model, tokens, requestCount, serviceTier, pricingAt)
+		return calculateStatsCost(ctx, billingService, pricing, model, tokens, requestCount, serviceTier, pricingAt, reasoningEffort)
 	}
 	return nil
 }
@@ -167,8 +182,12 @@ func isPlatformMatch(queryPlatform, pricingPlatform string) bool {
 // calculateStatsCost 以成本规则的独立价卡调用统一计费入口，倍率固定为 1。
 func calculateStatsCost(
 	ctx context.Context, billingService *BillingService, pricing *ChannelModelPricing,
-	model string, tokens UsageTokens, requestCount int, serviceTier string, pricingAt time.Time,
+	model string, tokens UsageTokens, requestCount int, serviceTier string, pricingAt time.Time, reasoningEfforts ...string,
 ) *float64 {
+	reasoningEffort := ""
+	if len(reasoningEfforts) > 0 {
+		reasoningEffort = reasoningEfforts[0]
+	}
 	if pricing == nil {
 		return nil
 	}
@@ -191,7 +210,8 @@ func calculateStatsCost(
 	breakdown, err := billingService.CalculateCostUnified(CostInput{
 		Ctx: ctx, Model: model, Tokens: tokens, RequestCount: requestCount,
 		RateMultiplier: 1, ServiceTier: serviceTier, PricingAt: pricingAt,
-		Resolver: resolver, Resolved: resolved,
+		ReasoningEffort: reasoningEffort,
+		Resolver:        resolver, Resolved: resolved,
 	})
 	if err != nil || breakdown == nil || breakdown.TotalCost <= 0 {
 		return nil
@@ -221,10 +241,14 @@ func applyAccountStatsCost(
 		requestCount = usageLog.ImageCount
 	}
 	serviceTier := ""
+	reasoningEffort := ""
 	if usageLog != nil && usageLog.ServiceTier != nil {
 		serviceTier = *usageLog.ServiceTier
 	}
+	if usageLog != nil && usageLog.ReasoningEffort != nil {
+		reasoningEffort = *usageLog.ReasoningEffort
+	}
 	usageLog.AccountStatsCost = resolveAccountStatsCost(
-		ctx, cs, bs, accountID, groupID, model, tokens, requestCount, totalCost, serviceTier, pricingAt,
+		ctx, cs, bs, accountID, groupID, model, tokens, requestCount, totalCost, serviceTier, pricingAt, reasoningEffort,
 	)
 }

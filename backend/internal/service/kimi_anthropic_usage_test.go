@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
@@ -231,12 +233,17 @@ func TestCNProviderAnthropicUsageBillsUncachedInput(t *testing.T) {
 			uncachedInput := max(openAIUsage.InputTokens-openAIUsage.CacheReadInputTokens-openAIUsage.CacheCreationInputTokens, 0)
 			require.Equal(t, tt.wantInput, uncachedInput)
 
-			cost, err := billing.CalculateCost(tt.model, UsageTokens{
-				InputTokens:         uncachedInput,
-				OutputTokens:        openAIUsage.OutputTokens,
-				CacheCreationTokens: openAIUsage.CacheCreationInputTokens,
-				CacheReadTokens:     openAIUsage.CacheReadInputTokens,
-			}, 1)
+			cost, err := billing.CalculateTokenCostForRequest(TokenCostRequest{
+				Ctx: context.Background(), Model: tt.model, RateMultiplier: 1,
+				// 缓存归一化测试固定为周末标准价，不受工作日峰时倍率影响。
+				PricingAt: time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC),
+				Tokens: UsageTokens{
+					InputTokens:         uncachedInput,
+					OutputTokens:        openAIUsage.OutputTokens,
+					CacheCreationTokens: openAIUsage.CacheCreationInputTokens,
+					CacheReadTokens:     openAIUsage.CacheReadInputTokens,
+				},
+			})
 			require.NoError(t, err)
 			require.Positive(t, cost.InputCost, "uncached input must contribute to the final charge")
 
