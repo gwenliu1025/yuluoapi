@@ -92,6 +92,10 @@ type userPricingIntervalDTO struct {
 	CacheWrite1hPrice      *float64 `json:"cache_write_1h_price"`
 	CacheReadPrice         *float64 `json:"cache_read_price"`
 	PerRequestPrice        *float64 `json:"per_request_price"`
+	InputMultiplier        *float64 `json:"input_multiplier"`
+	OutputMultiplier       *float64 `json:"output_multiplier"`
+	CacheWriteMultiplier   *float64 `json:"cache_write_multiplier"`
+	CacheReadMultiplier    *float64 `json:"cache_read_multiplier"`
 }
 
 // userSupportedModel 用户可见的支持模型条目。
@@ -307,6 +311,10 @@ func toUserPricingIntervals(src []service.PricingInterval) []userPricingInterval
 			CacheReadPrice:         iv.CacheReadPrice,
 			ExplicitCacheReadPrice: iv.ExplicitCacheReadPrice,
 			PerRequestPrice:        iv.PerRequestPrice,
+			InputMultiplier:        iv.InputMultiplier,
+			OutputMultiplier:       iv.OutputMultiplier,
+			CacheWriteMultiplier:   iv.CacheWriteMultiplier,
+			CacheReadMultiplier:    iv.CacheReadMultiplier,
 		})
 	}
 	return intervals

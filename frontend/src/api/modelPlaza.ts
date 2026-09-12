@@ -50,7 +50,7 @@ export interface PlazaTimePricing {
 export interface PlazaModel {
   name: string
   platform: string
-  /** 实收口径的展示定价：多档时 intervals 为各档绝对单价（已由计费服务折算）；均为标准时段价。 */
+  /** 实收口径的展示定价：档位可提供绝对单价或相对基础价倍率；均为标准时段价。 */
   pricing: UserSupportedModelPricing | null
   official_pricing: PlazaOfficialPricing | null
   /** 官方目录区分思考模式时返回；缺失时保持单行旧展示。 */

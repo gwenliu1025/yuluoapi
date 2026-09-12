@@ -285,6 +285,7 @@ func plazaPricingFromSchedule(raw *ChannelModelPricing, sched *ContextPricingSch
 	out.InputPrice = first.Input
 	out.OutputPrice = first.Output
 	out.CacheWritePrice = first.CacheWrite
+	out.CacheWrite1hPrice = first.CacheWrite1h
 	out.CacheReadPrice = first.CacheRead
 	out.ExplicitCacheReadPrice = first.ExplicitCacheRead
 	if len(sched.Tiers) > 1 {
@@ -306,6 +307,7 @@ func plazaIntervalsFromTiers(tiers []ContextPricingTier) []PricingInterval {
 			CacheReadPrice:         t.CacheRead,
 			ExplicitCacheReadPrice: t.ExplicitCacheRead,
 			SortOrder:              i,
+			CacheWrite1hPrice:      t.CacheWrite1h,
 		})
 	}
 	return intervals

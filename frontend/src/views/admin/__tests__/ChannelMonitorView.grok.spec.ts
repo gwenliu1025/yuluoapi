@@ -101,7 +101,9 @@ describe('channel monitor Grok provider', () => {
 
     expect(PROVIDERS).toContain(PROVIDER_GROK)
     const providerButtons = wrapper.findAll('[data-testid^="monitor-provider-"]')
-    expect(providerButtons).toHaveLength(8)
+    // 逐项核对当前平台 owner，MiniMax 加入后仍拒收缺失、重复与多余入口。
+    expect(providerButtons.map((button) => button.attributes('data-testid')).sort())
+      .toEqual(PROVIDERS.map((provider) => `monitor-provider-${provider}`).sort())
     expect(providerButtons[0].element.parentElement?.className).toContain('grid-cols-2')
     expect(providerButtons[0].element.parentElement?.className).toContain('sm:grid-cols-4')
 

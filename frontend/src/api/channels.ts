@@ -33,6 +33,10 @@ export interface UserPricingInterval {
   cache_read_price: number | null
   /** 隐式/显式缓存读取价不同时，单独给出显式读取价；原字段表示隐式读取。 */
   explicit_cache_read_price?: number | null
+  input_multiplier?: number | null
+  output_multiplier?: number | null
+  cache_write_multiplier?: number | null
+  cache_read_multiplier?: number | null
   per_request_price: number | null
 }
 

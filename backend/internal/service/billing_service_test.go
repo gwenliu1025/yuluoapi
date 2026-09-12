@@ -550,6 +550,20 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 
 		// ---- 智谱 GLM（本期人民币目录 + 历史 USD 价卡）----
 		{
+			name:              "glm 5.3 flagship",
+			model:             "glm-5.3",
+			expectedInput:     8e-6,
+			expectedOutput:    floatPtr(28e-6),
+			expectedCacheRead: floatPtr(2e-6),
+		},
+		{
+			name:              "glm 5.3 flash",
+			model:             "glm-5.3-flash",
+			expectedInput:     0.8e-6,
+			expectedOutput:    floatPtr(2.8e-6),
+			expectedCacheRead: floatPtr(0.23e-6),
+		},
+		{
 			name:              "glm 5.2 flagship",
 			model:             "glm-5.2",
 			expectedInput:     8e-6,
@@ -639,7 +653,21 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 			expectedInput:  0.1e-6,
 			expectedOutput: floatPtr(0.1e-6),
 		},
-		// 关键：5.1 / 5.2 必须先于 5 匹配（避免被 glm-5 抢走）
+		// 关键：5.1 / 5.2 / 5.3 必须先于 5 匹配（避免被 glm-5 抢走）
+		{
+			name:              "glm 5.3-flash vs glm 5.3 ordering (verbatim 5.3-flash)",
+			model:             "glm-5.3-flash",
+			expectedInput:     0.8e-6, // 采用人民币发行目录，不按通用 glm-5 回退
+			expectedOutput:    floatPtr(2.8e-6),
+			expectedCacheRead: floatPtr(0.23e-6),
+		},
+		{
+			name:              "glm 5.3 vs glm 5 ordering (verbatim 5.3)",
+			model:             "glm-5.3",
+			expectedInput:     8e-6, // 采用人民币发行目录，不按通用 glm-5 回退
+			expectedOutput:    floatPtr(28e-6),
+			expectedCacheRead: floatPtr(2e-6),
+		},
 		{
 			name:              "glm 5.1 vs glm 5 ordering (verbatim 5.1)",
 			model:             "glm-5.1",

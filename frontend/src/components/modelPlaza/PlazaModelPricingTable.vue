@@ -351,7 +351,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatScaled } from '@/utils/pricing'
+import { formatScaled, resolveIntervalPrices } from '@/utils/pricing'
 import { platformAccentColor, platformBadgeLightClass, platformLabel } from '@/utils/platformColors'
 import {
   BILLING_MODE_TOKEN,
@@ -585,7 +585,7 @@ function sortByContext(intervals: UserPricingInterval[]): UserPricingInterval[] 
 
 /** token 模式的阶梯定价(内联进输入/输出/缓存列)。 */
 function tokenIntervals(m: PlazaModel): UserPricingInterval[] {
-  return sortByContext(m.pricing?.intervals ?? [])
+  return sortByContext(m.pricing?.intervals ?? []).map(iv => resolveIntervalPrices(iv, m.pricing!))
 }
 
 /** 官方阶梯(后端按目录规则合成,不受分组开关影响)。 */
@@ -598,7 +598,9 @@ function hasCacheInterval(iv: UserPricingInterval): boolean {
     iv.cache_write_price != null ||
     iv.cache_write_1h_price != null ||
     iv.cache_read_price != null ||
-    iv.explicit_cache_read_price != null
+    iv.explicit_cache_read_price != null ||
+    iv.cache_write_multiplier != null ||
+    iv.cache_read_multiplier != null
   )
 }
 

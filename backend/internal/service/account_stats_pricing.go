@@ -18,6 +18,7 @@ import (
 // upstreamModel 是最终发往上游的模型 ID。
 // totalCost 是本次请求的客户计费（倍率前），用于优先级 2。
 // serviceTier 是最终参与用户计费的 OpenAI 服务层级，用于优先级 3。
+// pricingAt 与本次客户计费使用同一时刻，避免跨峰谷请求的成本与售价错位。
 // reasoningEffort 是最终转发等级；Fable 5.1 max 默认按 3 倍额度消耗。
 func resolveAccountStatsCost(
 	ctx context.Context,
@@ -85,6 +86,8 @@ func tryModelFilePricing(
 		Ctx: ctx, Model: model, Tokens: tokens, RateMultiplier: 1,
 		ServiceTier: normalizeBillingServiceTier(serviceTier), PricingAt: pricingAt,
 		ReasoningEffort: reasoningEffort,
+		// 账号成本只读模型价卡，隔离渠道与分组的自定义售价。
+		Resolver: NewModelPricingResolver(nil, billingService),
 	})
 	if err != nil || breakdown == nil || breakdown.TotalCost <= 0 {
 		return nil
